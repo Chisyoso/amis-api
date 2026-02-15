@@ -43,7 +43,7 @@ app.get("/formation", async (req, res) => {
     // rayas del pasto
     for (let i = 0; i < HEIGHT; i += 80) {
       ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
-      ctx.fillRect(0, i, WIDTH, 80);
+      ctx.fillRect(0, i, 80, WIDTH);
     }
 
     ctx.strokeStyle = "white";
@@ -67,7 +67,7 @@ app.get("/formation", async (req, res) => {
 
     // media luna
     ctx.beginPath();
-    ctx.arc(WIDTH - 120, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
+    ctx.arc(WIDTH - 250, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
 
     // =========================
