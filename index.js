@@ -76,12 +76,23 @@ app.get("/formation", async (req, res) => {
     ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 
     // =========================
-    // JUGADORES (SIEMPRE)
+    // LINEAS DE SAQUE
+    // =========================
+    ctx.beginPath();
+    ctx.moveTo(WIDTH - 350, 100);
+    ctx.lineTo(WIDTH - 350, HEIGHT - 100);
+    ctx.stroke();
+
+    // =========================
+    // JUGADORES
     // =========================
     for (const pos in positions) {
       let avatarURL = decode(req.query[pos + "Avatar"]);
-      const name = decode(req.query[pos + "Name"]);
-      const style = decode(req.query[pos + "Style"]);
+      let name = decode(req.query[pos + "Name"]);
+      let style = decode(req.query[pos + "Style"]);
+
+      if (!name) name = "?";
+      if (!style) style = "?";
 
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
@@ -90,6 +101,20 @@ app.get("/formation", async (req, res) => {
 
       const { x, y } = positions[pos];
       const size = 170;
+
+      // =====================
+      // ESTADO COLOR
+      // =====================
+      let statusColor = "red";
+
+      if (
+        avatarURL !== DEFAULT_AVATAR ||
+        name !== "?"
+      ) {
+        statusColor = "green";
+      } else if (style !== "?") {
+        statusColor = "yellow";
+      }
 
       // sombra
       ctx.fillStyle = "rgba(0,0,0,0.25)";
@@ -100,20 +125,31 @@ app.get("/formation", async (req, res) => {
       // avatar
       ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
 
+      // =====================
+      // CÍRCULO PRO
+      // =====================
+      ctx.beginPath();
+      ctx.arc(x, y + size / 2 + 35, 22, 0, Math.PI * 2);
+      ctx.fillStyle = statusColor;
+      ctx.fill();
+
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "white";
+      ctx.stroke();
+
+      // textos
       ctx.textAlign = "center";
       ctx.strokeStyle = "black";
       ctx.fillStyle = "white";
       ctx.lineWidth = 8;
 
-      // nombre
       ctx.font = "bold 30px Sans";
-      ctx.strokeText(name || "?", x, y + 115);
-      ctx.fillText(name || "?", x, y + 115);
+      ctx.strokeText(name, x, y + 115);
+      ctx.fillText(name, x, y + 115);
 
-      // estilo
       ctx.font = "22px Sans";
-      ctx.strokeText(style || "?", x, y + 145);
-      ctx.fillText(style || "?", x, y + 145);
+      ctx.strokeText(style, x, y + 145);
+      ctx.fillText(style, x, y + 145);
     }
 
     res.set("Content-Type", "image/png");
@@ -124,4 +160,4 @@ app.get("/formation", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log("API estadio lista 🏟️🔥"));
+app.listen(PORT, () => console.log("API estadio PRO lista 🏟️🔥"));
