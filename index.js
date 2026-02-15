@@ -67,7 +67,7 @@ app.get("/formation", async (req, res) => {
 
     // media luna
     ctx.beginPath();
-    ctx.arc(WIDTH - 250, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
+    ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
 
     // =========================
