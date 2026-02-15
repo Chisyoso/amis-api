@@ -1,6 +1,7 @@
 const express = require("express");
 const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
+const DEFAULT_AVATAR = "https://i.imgur.com/5hxFpJV.png";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,43 +81,50 @@ app.get("/formation", async (req, res) => {
     // JUGADORES
     // =========================
     for (const pos in positions) {
-      const avatarURL = decodeURIComponent(req.query[pos + "Avatar"] || "");
-      const name = decodeURIComponent(req.query[pos + "Name"] || "?");
-      const style = decodeURIComponent(req.query[pos + "Style"] || "");
+  let avatarURL = decodeURIComponent(req.query[pos + "Avatar"] || "");
+  const name = decodeURIComponent(req.query[pos + "Name"] || "");
+  const style = decodeURIComponent(req.query[pos + "Style"] || "");
 
-      if (!avatarURL || name === "?") continue;
+  // si no hay absolutamente nada → no dibujar
+  if (!avatarURL && !name && !style) continue;
 
-      const avatar = await loadAvatar(avatarURL);
-      if (!avatar) continue;
+  // si no hay avatar pero sí info → usar default
+  if (!avatarURL) avatarURL = DEFAULT_AVATAR;
 
-      const { x, y } = positions[pos];
-      const size = 170;
+  const avatar = await loadAvatar(avatarURL);
+  if (!avatar) continue;
 
-      // sombra
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
-      ctx.fill();
+  const { x, y } = positions[pos];
+  const size = 170;
 
-      // avatar
-      ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+  // sombra
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "black";
-      ctx.fillStyle = "white";
-      ctx.lineWidth = 8;
+  // avatar
+  ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
 
-      // nombre
-      ctx.font = "bold 30px Sans";
-      ctx.strokeText(name, x, y + 115);
-      ctx.fillText(name, x, y + 115);
+  ctx.textAlign = "center";
+  ctx.strokeStyle = "black";
+  ctx.fillStyle = "white";
+  ctx.lineWidth = 8;
 
-      // estilo
-      ctx.font = "22px Sans";
-      ctx.strokeText(style, x, y + 145);
-      ctx.fillText(style, x, y + 145);
-    }
+  // nombre
+  if (name) {
+    ctx.font = "bold 30px Sans";
+    ctx.strokeText(name, x, y + 115);
+    ctx.fillText(name, x, y + 115);
+  }
 
+  // estilo
+  if (style) {
+    ctx.font = "22px Sans";
+    ctx.strokeText(style, x, y + 145);
+    ctx.fillText(style, x, y + 145);
+  }
+}
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
 
