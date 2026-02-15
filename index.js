@@ -1,6 +1,7 @@
 const express = require("express");
 const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
+
 const DEFAULT_AVATAR = "https://i.imgur.com/5hxFpJV.png";
 
 const app = express();
@@ -41,11 +42,11 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // rayas del pasto
+    // rayas verticales
     for (let i = 0; i < WIDTH; i += 80) {
-  ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
-  ctx.fillRect(i, 0, 80, HEIGHT);
-}
+      ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
+      ctx.fillRect(i, 0, 80, HEIGHT);
+    }
 
     ctx.strokeStyle = "white";
     ctx.lineWidth = 5;
@@ -53,20 +54,14 @@ app.get("/formation", async (req, res) => {
     // =========================
     // MEDIA CANCHA
     // =========================
-
-    // línea lateral derecha
     ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-
-    // área chica
     ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
 
-    // punto penal
     ctx.beginPath();
     ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
     ctx.fillStyle = "white";
     ctx.fill();
 
-    // media luna
     ctx.beginPath();
     ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
@@ -81,50 +76,56 @@ app.get("/formation", async (req, res) => {
     // JUGADORES
     // =========================
     for (const pos in positions) {
-  let avatarURL = decodeURIComponent(req.query[pos + "Avatar"] || "");
-  const name = decodeURIComponent(req.query[pos + "Name"] || "");
-  const style = decodeURIComponent(req.query[pos + "Style"] || "");
+      let avatarURL = decodeURIComponent(req.query[pos + "Avatar"] || "").trim();
+      let name = decodeURIComponent(req.query[pos + "Name"] || "").trim();
+      let style = decodeURIComponent(req.query[pos + "Style"] || "").trim();
 
-  // si no hay absolutamente nada → no dibujar
-  if (!avatarURL && !name && !style) continue;
+      // convertir "?" en vacío
+      if (name === "?") name = "";
+      if (style === "?") style = "";
 
-  // si no hay avatar pero sí info → usar default
-  if (!avatarURL) avatarURL = DEFAULT_AVATAR;
+      // si no hay absolutamente nada → no dibujar
+      if (!avatarURL && !name && !style) continue;
 
-  const avatar = await loadAvatar(avatarURL);
-  if (!avatar) continue;
+      // si no hay avatar pero hay info → default
+      if (!avatarURL) avatarURL = DEFAULT_AVATAR;
 
-  const { x, y } = positions[pos];
-  const size = 170;
+      let avatar = await loadAvatar(avatarURL);
 
-  // sombra
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
-  ctx.fill();
+      // si falla → default
+      if (!avatar) avatar = await loadAvatar(DEFAULT_AVATAR);
+      if (!avatar) continue;
 
-  // avatar
-  ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+      const { x, y } = positions[pos];
+      const size = 170;
 
-  ctx.textAlign = "center";
-  ctx.strokeStyle = "black";
-  ctx.fillStyle = "white";
-  ctx.lineWidth = 8;
+      // sombra
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-  // nombre
-  if (name) {
-    ctx.font = "bold 30px Sans";
-    ctx.strokeText(name, x, y + 115);
-    ctx.fillText(name, x, y + 115);
-  }
+      // avatar
+      ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
 
-  // estilo
-  if (style) {
-    ctx.font = "22px Sans";
-    ctx.strokeText(style, x, y + 145);
-    ctx.fillText(style, x, y + 145);
-  }
-}
+      ctx.textAlign = "center";
+      ctx.strokeStyle = "black";
+      ctx.fillStyle = "white";
+      ctx.lineWidth = 8;
+
+      if (name) {
+        ctx.font = "bold 30px Sans";
+        ctx.strokeText(name, x, y + 115);
+        ctx.fillText(name, x, y + 115);
+      }
+
+      if (style) {
+        ctx.font = "22px Sans";
+        ctx.strokeText(style, x, y + 145);
+        ctx.fillText(style, x, y + 145);
+      }
+    }
+
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
 
