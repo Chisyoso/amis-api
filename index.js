@@ -13,7 +13,7 @@ const positions = {
   cf: { x: 250, y: HEIGHT / 2 },
   cm: { x: WIDTH / 2, y: HEIGHT / 2 },
   gk: { x: WIDTH - 220, y: HEIGHT / 2 },
-  lw: { x: WIDTH / 2, y: HEIGHT - 120 }
+  lw: { x: WIDTH / 2, y: HEIGHT - 80 }
 };
 
 async function loadAvatar(url) {
@@ -67,7 +67,7 @@ app.get("/formation", async (req, res) => {
 
     // media luna
     ctx.beginPath();
-    ctx.arc(WIDTH - 200, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
+    ctx.arc(WIDTH - 10, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
 
     // =========================
