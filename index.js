@@ -41,10 +41,10 @@ app.get("/formation", async (req, res) => {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
     // rayas del pasto
-    for (let i = 0; i < HEIGHT; i += 80) {
-      ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
-      ctx.fillRect(0, i, 80, WIDTH);
-    }
+    for (let i = 0; i < WIDTH; i += 80) {
+  ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
+  ctx.fillRect(i, 0, 80, HEIGHT);
+}
 
     ctx.strokeStyle = "white";
     ctx.lineWidth = 5;
