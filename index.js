@@ -28,11 +28,8 @@ async function loadAvatar(url) {
   }
 }
 
-function clean(value) {
-  if (!value) return "";
-  value = decodeURIComponent(value);
-  if (value === "?") return "";
-  return value;
+function decode(v) {
+  return decodeURIComponent(v || "");
 }
 
 app.get("/formation", async (req, res) => {
@@ -49,7 +46,7 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // rayas verticales (de arriba a abajo)
+    // rayas verticales
     for (let i = 0; i < WIDTH; i += 80) {
       ctx.fillStyle =
         i % 160 === 0
@@ -61,11 +58,8 @@ app.get("/formation", async (req, res) => {
     ctx.strokeStyle = "white";
     ctx.lineWidth = 5;
 
-    // =========================
-    // MEDIA CANCHA DERECHA
-    // =========================
+    // área derecha
     ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-
     ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
 
     ctx.beginPath();
@@ -77,9 +71,7 @@ app.get("/formation", async (req, res) => {
     ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
 
-    // =========================
-    // PORTERÍA
-    // =========================
+    // portería
     ctx.fillStyle = "#e0e0e0";
     ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 
@@ -87,15 +79,16 @@ app.get("/formation", async (req, res) => {
     // JUGADORES
     // =========================
     for (const pos in positions) {
-      let avatarURL = clean(req.query[pos + "Avatar"]);
-      const name = clean(req.query[pos + "Name"]);
-      const style = clean(req.query[pos + "Style"]);
+      const rawAvatar = decode(req.query[pos + "Avatar"]);
+      const rawName = decode(req.query[pos + "Name"]);
+      const rawStyle = decode(req.query[pos + "Style"]);
 
-      // 🚫 si ambos están vacíos → no dibujar
-      if (!name && !style) continue;
+      // 🚨 EXISTENCIA DEL JUGADOR
+      if (rawName === "?" && rawStyle === "?") continue;
 
-      // si se va a dibujar pero no hay avatar → default
-      if (!avatarURL) avatarURL = DEFAULT_AVATAR;
+      // determinar avatar
+      let avatarURL = rawAvatar;
+      if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
       const avatar = await loadAvatar(avatarURL);
       if (!avatar) continue;
@@ -117,16 +110,16 @@ app.get("/formation", async (req, res) => {
       ctx.fillStyle = "white";
       ctx.lineWidth = 8;
 
-      // nombre (si no hay, mostrar "?")
+      // nombre (si es "?" mostrar "?")
       ctx.font = "bold 30px Sans";
-      ctx.strokeText(name || "?", x, y + 115);
-      ctx.fillText(name || "?", x, y + 115);
+      ctx.strokeText(rawName === "?" ? "?" : rawName, x, y + 115);
+      ctx.fillText(rawName === "?" ? "?" : rawName, x, y + 115);
 
       // estilo
-      if (style) {
+      if (rawStyle !== "?") {
         ctx.font = "22px Sans";
-        ctx.strokeText(style, x, y + 145);
-        ctx.fillText(style, x, y + 145);
+        ctx.strokeText(rawStyle, x, y + 145);
+        ctx.fillText(rawStyle, x, y + 145);
       }
     }
 
