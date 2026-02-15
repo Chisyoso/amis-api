@@ -28,13 +28,20 @@ async function loadAvatar(url) {
   }
 }
 
+function clean(value) {
+  if (!value) return "";
+  value = decodeURIComponent(value);
+  if (value === "?") return "";
+  return value;
+}
+
 app.get("/formation", async (req, res) => {
   try {
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // CESPED
+    // CÉSPED
     // =========================
     const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
     grad.addColorStop(0, "#3a9d23");
@@ -42,9 +49,12 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // rayas verticales
+    // rayas verticales (de arriba a abajo)
     for (let i = 0; i < WIDTH; i += 80) {
-      ctx.fillStyle = i % 160 === 0 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
+      ctx.fillStyle =
+        i % 160 === 0
+          ? "rgba(255,255,255,0.04)"
+          : "rgba(0,0,0,0.04)";
       ctx.fillRect(i, 0, 80, HEIGHT);
     }
 
@@ -52,9 +62,10 @@ app.get("/formation", async (req, res) => {
     ctx.lineWidth = 5;
 
     // =========================
-    // MEDIA CANCHA
+    // MEDIA CANCHA DERECHA
     // =========================
     ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
+
     ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
 
     ctx.beginPath();
@@ -76,24 +87,17 @@ app.get("/formation", async (req, res) => {
     // JUGADORES
     // =========================
     for (const pos in positions) {
-      let avatarURL = decodeURIComponent(req.query[pos + "Avatar"] || "").trim();
-      let name = decodeURIComponent(req.query[pos + "Name"] || "").trim();
-      let style = decodeURIComponent(req.query[pos + "Style"] || "").trim();
+      let avatarURL = clean(req.query[pos + "Avatar"]);
+      const name = clean(req.query[pos + "Name"]);
+      const style = clean(req.query[pos + "Style"]);
 
-      // convertir "?" en vacío
-      if (name === "?") name = "";
-      if (style === "?") style = "";
+      // 🚫 si ambos están vacíos → no dibujar
+      if (!name && !style) continue;
 
-      // si no hay absolutamente nada → no dibujar
-      if (!avatarURL && !name && !style) continue;
-
-      // si no hay avatar pero hay info → default
+      // si se va a dibujar pero no hay avatar → default
       if (!avatarURL) avatarURL = DEFAULT_AVATAR;
 
-      let avatar = await loadAvatar(avatarURL);
-
-      // si falla → default
-      if (!avatar) avatar = await loadAvatar(DEFAULT_AVATAR);
+      const avatar = await loadAvatar(avatarURL);
       if (!avatar) continue;
 
       const { x, y } = positions[pos];
@@ -113,12 +117,12 @@ app.get("/formation", async (req, res) => {
       ctx.fillStyle = "white";
       ctx.lineWidth = 8;
 
-      if (name) {
-        ctx.font = "bold 30px Sans";
-        ctx.strokeText(name, x, y + 115);
-        ctx.fillText(name, x, y + 115);
-      }
+      // nombre (si no hay, mostrar "?")
+      ctx.font = "bold 30px Sans";
+      ctx.strokeText(name || "?", x, y + 115);
+      ctx.fillText(name || "?", x, y + 115);
 
+      // estilo
       if (style) {
         ctx.font = "22px Sans";
         ctx.strokeText(style, x, y + 145);
@@ -128,7 +132,6 @@ app.get("/formation", async (req, res) => {
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
-
   } catch (err) {
     console.log(err);
     res.status(500).send("Error generando imagen");
