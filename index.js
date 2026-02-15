@@ -76,18 +76,13 @@ app.get("/formation", async (req, res) => {
     ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 
     // =========================
-    // JUGADORES
+    // JUGADORES (SIEMPRE)
     // =========================
     for (const pos in positions) {
-      const rawAvatar = decode(req.query[pos + "Avatar"]);
-      const rawName = decode(req.query[pos + "Name"]);
-      const rawStyle = decode(req.query[pos + "Style"]);
+      let avatarURL = decode(req.query[pos + "Avatar"]);
+      const name = decode(req.query[pos + "Name"]);
+      const style = decode(req.query[pos + "Style"]);
 
-      // 🚨 EXISTENCIA DEL JUGADOR
-      if (rawName === "?" && rawStyle === "?") continue;
-
-      // determinar avatar
-      let avatarURL = rawAvatar;
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
       const avatar = await loadAvatar(avatarURL);
@@ -110,17 +105,15 @@ app.get("/formation", async (req, res) => {
       ctx.fillStyle = "white";
       ctx.lineWidth = 8;
 
-      // nombre (si es "?" mostrar "?")
+      // nombre
       ctx.font = "bold 30px Sans";
-      ctx.strokeText(rawName === "?" ? "?" : rawName, x, y + 115);
-      ctx.fillText(rawName === "?" ? "?" : rawName, x, y + 115);
+      ctx.strokeText(name || "?", x, y + 115);
+      ctx.fillText(name || "?", x, y + 115);
 
       // estilo
-      if (rawStyle !== "?") {
-        ctx.font = "22px Sans";
-        ctx.strokeText(rawStyle, x, y + 145);
-        ctx.fillText(rawStyle, x, y + 145);
-      }
+      ctx.font = "22px Sans";
+      ctx.strokeText(style || "?", x, y + 145);
+      ctx.fillText(style || "?", x, y + 145);
     }
 
     res.set("Content-Type", "image/png");
