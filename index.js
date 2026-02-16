@@ -75,16 +75,14 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = "#e0e0e0";
     ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 
-    // =========================
-    // LINEAS DE SAQUE
-    // =========================
+    // línea lateral
     ctx.beginPath();
     ctx.moveTo(WIDTH - 350, 100);
     ctx.lineTo(WIDTH - 350, HEIGHT - 100);
     ctx.stroke();
 
     // =========================
-    // JUGADORES
+    // JUGADORES (SIEMPRE)
     // =========================
     for (const pos in positions) {
       let avatarURL = decode(req.query[pos + "Avatar"]);
@@ -93,27 +91,42 @@ app.get("/formation", async (req, res) => {
 
       if (!name) name = "?";
       if (!style) style = "?";
-
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
-
-      const avatar = await loadAvatar(avatarURL);
-      if (!avatar) continue;
 
       const { x, y } = positions[pos];
       const size = 170;
 
       // =====================
-      // ESTADO COLOR
+      // COLOR ESTADO
       // =====================
-      let statusColor = "red";
+      let statusColor = "#ff5252"; // rojo
 
-      if (
-        avatarURL !== DEFAULT_AVATAR ||
-        name !== "?"
-      ) {
-        statusColor = "green";
+      if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
+        statusColor = "#00e676"; // verde
       } else if (style !== "?") {
-        statusColor = "yellow";
+        statusColor = "#ffd600"; // amarillo
+      }
+
+      // =====================
+      // ARO GRANDE (DEBAJO)
+      // =====================
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
+      ctx.fillStyle = statusColor;
+      ctx.fill();
+
+      // =====================
+      // AVATAR
+      // =====================
+      const avatar = await loadAvatar(avatarURL);
+      if (avatar) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+        ctx.restore();
       }
 
       // sombra
@@ -122,22 +135,9 @@ app.get("/formation", async (req, res) => {
       ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // avatar
-      ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-
       // =====================
-      // CÍRCULO PRO
+      // TEXTOS
       // =====================
-      ctx.beginPath();
-      ctx.arc(x, y + size / 2 + 35, 22, 0, Math.PI * 2);
-      ctx.fillStyle = statusColor;
-      ctx.fill();
-
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "white";
-      ctx.stroke();
-
-      // textos
       ctx.textAlign = "center";
       ctx.strokeStyle = "black";
       ctx.fillStyle = "white";
