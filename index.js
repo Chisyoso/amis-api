@@ -10,13 +10,56 @@ const PORT = process.env.PORT || 3000;
 const WIDTH = 1600;
 const HEIGHT = 1000;
 
-const positions = {
+// =========================
+// POSICIONES BASE
+// =========================
+const basePositions = {
   rw: { x: WIDTH / 2, y: 120 },
   cf: { x: 250, y: HEIGHT / 2 },
   cm: { x: WIDTH / 2, y: HEIGHT / 2 },
   gk: { x: WIDTH - 220, y: HEIGHT / 2 },
   lw: { x: WIDTH / 2, y: HEIGHT - 160 }
 };
+
+// =========================
+// FORMACIONES
+// =========================
+function getFormation(type) {
+  if (type === "3") {
+    return {
+      rw: basePositions.rw,
+      cf: basePositions.cf,
+      lw: basePositions.lw
+    };
+  }
+
+  if (type === "4") {
+    return {
+      rw: basePositions.rw,
+      cf: basePositions.cf,
+      lw: basePositions.lw,
+      gk: basePositions.gk
+    };
+  }
+
+  if (type === "8") {
+    return {
+      rw1: { x: WIDTH / 2 - 200, y: 120 },
+      rw2: { x: WIDTH / 2 + 200, y: 120 },
+
+      cf1: { x: 250, y: HEIGHT / 2 - 120 },
+      cf2: { x: 250, y: HEIGHT / 2 + 120 },
+
+      lw1: { x: WIDTH / 2 - 200, y: HEIGHT - 160 },
+      lw2: { x: WIDTH / 2 + 200, y: HEIGHT - 160 },
+
+      cm: basePositions.cm,
+      gk: basePositions.gk
+    };
+  }
+
+  return basePositions; // default
+}
 
 async function loadAvatar(url) {
   try {
@@ -34,6 +77,9 @@ function decode(v) {
 
 app.get("/formation", async (req, res) => {
   try {
+    const formationType = req.query.type; // 👈 nuevo
+    const positions = getFormation(formationType);
+
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
@@ -46,7 +92,6 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // rayas verticales
     for (let i = 0; i < WIDTH; i += 80) {
       ctx.fillStyle =
         i % 160 === 0
@@ -58,7 +103,6 @@ app.get("/formation", async (req, res) => {
     ctx.strokeStyle = "white";
     ctx.lineWidth = 5;
 
-    // área derecha
     ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
     ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
 
@@ -71,27 +115,36 @@ app.get("/formation", async (req, res) => {
     ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
     ctx.stroke();
 
-    // portería
     ctx.fillStyle = "#e0e0e0";
     ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 
-    // línea lateral
     ctx.beginPath();
     ctx.moveTo(WIDTH - 350, 100);
     ctx.lineTo(WIDTH - 350, HEIGHT - 100);
     ctx.stroke();
 
     // =========================
-    // JUGADORES (SIEMPRE)
+    // CONTADOR DE JUGADORES (para /8)
+    // =========================
+    let playerCount = 0;
+
+    // =========================
+    // JUGADORES
     // =========================
     for (const pos in positions) {
-      let avatarURL = decode(req.query[pos + "Avatar"]);
-      let name = decode(req.query[pos + "Name"]);
-      let style = decode(req.query[pos + "Style"]);
+      let baseKey = pos.replace(/[0-9]/g, ""); // rw1 → rw
+
+      let avatarURL = decode(req.query[baseKey + "Avatar"]);
+      let name = decode(req.query[baseKey + "Name"]);
+      let style = decode(req.query[baseKey + "Style"]);
 
       if (!name) name = "?";
       if (!style) style = "?";
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
+
+      if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
+        playerCount++;
+      }
 
       const { x, y } = positions[pos];
       const size = 170;
@@ -99,16 +152,26 @@ app.get("/formation", async (req, res) => {
       // =====================
       // COLOR ESTADO
       // =====================
-      let statusColor = "#ff5252"; // rojo
+      let statusColor = null;
 
-      if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
-        statusColor = "#00e676"; // verde
-      } else if (style !== "?") {
-        statusColor = "#ffd600"; // amarillo
+      if (formationType === "8") {
+        // SOLO en /8 mostramos rojo si faltan
+        if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
+          statusColor = "#00e676";
+        } else {
+          statusColor = "#ff5252";
+        }
+      } else {
+        // en otros modos solo verde si existe
+        if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
+          statusColor = "#00e676";
+        } else {
+          continue; // 🔥 no dibuja posiciones vacías
+        }
       }
 
       // =====================
-      // ARO GRANDE (DEBAJO)
+      // ARO
       // =====================
       ctx.beginPath();
       ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
@@ -123,7 +186,6 @@ app.get("/formation", async (req, res) => {
         ctx.save();
         ctx.beginPath();
         ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-        ctx.closePath();
         ctx.clip();
         ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
         ctx.restore();
@@ -136,7 +198,7 @@ app.get("/formation", async (req, res) => {
       ctx.fill();
 
       // =====================
-      // TEXTOS
+      // TEXTO
       // =====================
       ctx.textAlign = "center";
       ctx.strokeStyle = "black";
@@ -154,6 +216,7 @@ app.get("/formation", async (req, res) => {
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
+
   } catch (err) {
     console.log(err);
     res.status(500).send("Error generando imagen");
