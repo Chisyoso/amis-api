@@ -150,69 +150,65 @@ app.get("/formation", async (req, res) => {
       const size = 170;
 
       // =====================
-      // COLOR ESTADO
-      // =====================
-      let statusColor = null;
+// COLOR ESTADO
+// =====================
+let hasPlayer = (name !== "?" || avatarURL !== DEFAULT_AVATAR);
 
-      if (formationType === "8") {
-        // SOLO en /8 mostramos rojo si faltan
-        if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
-          statusColor = "#00e676";
-        } else {
-          statusColor = "#ff5252";
-        }
-      } else {
-        // en otros modos solo verde si existe
-        if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
-          statusColor = "#00e676";
-        } else {
-          continue; // 🔥 no dibuja posiciones vacías
-        }
-      }
+let statusColor;
 
-      // =====================
-      // ARO
-      // =====================
-      ctx.beginPath();
-      ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
-      ctx.fillStyle = statusColor;
-      ctx.fill();
+// 🔥 REGLA GLOBAL
+if (hasPlayer) {
+  statusColor = "#00e676"; // verde
+} else {
+  statusColor = "#ff5252"; // rojo SIEMPRE que la posición exista
+}
 
-      // =====================
-      // AVATAR
-      // =====================
-      const avatar = await loadAvatar(avatarURL);
-      if (avatar) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-        ctx.restore();
-      }
+// =====================
+// ARO (SIEMPRE se dibuja)
+// =====================
+ctx.beginPath();
+ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
+ctx.fillStyle = statusColor;
+ctx.fill();
 
-      // sombra
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
-      ctx.fill();
+// =====================
+// AVATAR (solo si hay)
+// =====================
+if (hasPlayer) {
+  const avatar = await loadAvatar(avatarURL);
+  if (avatar) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+    ctx.restore();
+  }
+}
 
-      // =====================
-      // TEXTO
-      // =====================
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "black";
-      ctx.fillStyle = "white";
-      ctx.lineWidth = 8;
+// sombra
+ctx.fillStyle = "rgba(0,0,0,0.25)";
+ctx.beginPath();
+ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
+ctx.fill();
 
-      ctx.font = "bold 30px Sans";
-      ctx.strokeText(name, x, y + 115);
-      ctx.fillText(name, x, y + 115);
+// =====================
+// TEXTO (solo si hay)
+// =====================
+if (hasPlayer) {
+  ctx.textAlign = "center";
+  ctx.strokeStyle = "black";
+  ctx.fillStyle = "white";
+  ctx.lineWidth = 8;
 
-      ctx.font = "22px Sans";
-      ctx.strokeText(style, x, y + 145);
-      ctx.fillText(style, x, y + 145);
-    }
+  ctx.font = "bold 30px Sans";
+  ctx.strokeText(name, x, y + 115);
+  ctx.fillText(name, x, y + 115);
+
+  ctx.font = "22px Sans";
+  ctx.strokeText(style, x, y + 145);
+  ctx.fillText(style, x, y + 145);
+}
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
