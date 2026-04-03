@@ -11,47 +11,27 @@ const WIDTH = 1600;
 const HEIGHT = 1000;
 
 // =========================
-// POSICIONES BASE
+// POSICIONES BASE (MEJORADAS)
 // =========================
-const basePositions = {
-  rw: { x: WIDTH / 2, y: 120 },
-  drw: { x: WIDTH / 2 + 220 - 110, y: 120 },
+const positions = {
+  rw: { x: WIDTH / 2 - 110, y: 120 },
+  drw: { x: WIDTH / 2 + 110, y: 120 },
 
-  cf: { x: 250, y: HEIGHT / 2 - 70 },
-  dcf: { x: 250, y: HEIGHT / 2 + 70 },
+  cf: { x: 250, y: HEIGHT / 2 - 120 },   // 🔥 separado
+  dcf: { x: 250, y: HEIGHT / 2 + 120 },  // 🔥 separado
 
-  lw: { x: WIDTH / 2, y: HEIGHT - 160 },
-  dlw: { x: WIDTH / 2 + 220 - 110, y: HEIGHT - 160 },
+  lw: { x: WIDTH / 2 - 110, y: HEIGHT - 160 },
+  dlw: { x: WIDTH / 2 + 110, y: HEIGHT - 160 },
 
   cm: { x: WIDTH / 2, y: HEIGHT / 2 },
   gk: { x: WIDTH - 220, y: HEIGHT / 2 }
 };
 
-// =========================
-// FORMACIONES
-// =========================
 function getFormation(type) {
-
-  if (type === "3") {
-    return ["rw", "cf", "lw"];
-  }
-
-  if (type === "4") {
-    return ["rw", "cf", "lw", "gk"];
-  }
-
   if (type === "8") {
     return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
   }
-
-  return ["rw","cf","cm","gk","lw"]; // default
-}
-
-// =========================
-// POSICIONES
-// =========================
-function getPositionCoords(pos) {
-  return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
+  return ["rw","cf","cm","gk","lw"]; // sistema original intacto
 }
 
 async function loadAvatar(url) {
@@ -74,8 +54,8 @@ function decode(v) {
 app.get("/formation", async (req, res) => {
   try {
 
-    const formationType = req.query.type;
-    let activePositions = getFormation(formationType);
+    const type = req.query.type;
+    const activePositions = getFormation(type);
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -129,7 +109,7 @@ app.get("/formation", async (req, res) => {
       let name = decode(req.query[pos + "Name"]);
       let style = decode(req.query[pos + "Style"]);
 
-      // fallback a sistema viejo (compatibilidad TOTAL)
+      // 🔥 compatibilidad vieja
       if (!name) name = decode(req.query[pos.replace("d","") + "Name"]);
       if (!style) style = decode(req.query[pos.replace("d","") + "Style"]);
       if (!avatarURL) avatarURL = decode(req.query[pos.replace("d","") + "Avatar"]);
@@ -138,11 +118,19 @@ app.get("/formation", async (req, res) => {
       if (!style) style = "?";
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
-      const { x, y } = getPositionCoords(pos);
+      const { x, y } = positions[pos];
       const size = 170;
 
-      let hasPlayer = (name !== "?" || avatarURL !== DEFAULT_AVATAR);
-      let statusColor = hasPlayer ? "#00e676" : "#ff5252";
+      // =====================
+      // 🔥 COLOR ESTADO (ARREGLADO)
+      // =====================
+      let statusColor = "#ff5252"; // rojo
+
+      if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
+        statusColor = "#00e676"; // verde
+      } else if (style !== "?") {
+        statusColor = "#ffd600"; // amarillo
+      }
 
       // aro
       ctx.beginPath();
@@ -151,16 +139,14 @@ app.get("/formation", async (req, res) => {
       ctx.fill();
 
       // avatar
-      if (hasPlayer) {
-        const avatar = await loadAvatar(avatarURL);
-        if (avatar) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-          ctx.restore();
-        }
+      const avatar = await loadAvatar(avatarURL);
+      if (avatar) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+        ctx.restore();
       }
 
       // sombra
@@ -170,20 +156,18 @@ app.get("/formation", async (req, res) => {
       ctx.fill();
 
       // texto
-      if (hasPlayer) {
-        ctx.textAlign = "center";
-        ctx.strokeStyle = "black";
-        ctx.fillStyle = "white";
-        ctx.lineWidth = 8;
+      ctx.textAlign = "center";
+      ctx.strokeStyle = "black";
+      ctx.fillStyle = "white";
+      ctx.lineWidth = 8;
 
-        ctx.font = "bold 30px Sans";
-        ctx.strokeText(name, x, y + 115);
-        ctx.fillText(name, x, y + 115);
+      ctx.font = "bold 30px Sans";
+      ctx.strokeText(name, x, y + 115);
+      ctx.fillText(name, x, y + 115);
 
-        ctx.font = "22px Sans";
-        ctx.strokeText(style, x, y + 145);
-        ctx.fillText(style, x, y + 145);
-      }
+      ctx.font = "22px Sans";
+      ctx.strokeText(style, x, y + 145);
+      ctx.fillText(style, x, y + 145);
     }
 
     res.set("Content-Type", "image/png");
