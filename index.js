@@ -15,10 +15,16 @@ const HEIGHT = 1000;
 // =========================
 const basePositions = {
   rw: { x: WIDTH / 2, y: 120 },
-  cf: { x: 250, y: HEIGHT / 2 },
+  drw: { x: WIDTH / 2 + 220 - 110, y: 120 },
+
+  cf: { x: 250, y: HEIGHT / 2 - 70 },
+  dcf: { x: 250, y: HEIGHT / 2 + 70 },
+
+  lw: { x: WIDTH / 2, y: HEIGHT - 160 },
+  dlw: { x: WIDTH / 2 + 220 - 110, y: HEIGHT - 160 },
+
   cm: { x: WIDTH / 2, y: HEIGHT / 2 },
-  gk: { x: WIDTH - 220, y: HEIGHT / 2 },
-  lw: { x: WIDTH / 2, y: HEIGHT - 160 }
+  gk: { x: WIDTH - 220, y: HEIGHT / 2 }
 };
 
 // =========================
@@ -35,33 +41,16 @@ function getFormation(type) {
   }
 
   if (type === "8") {
-    return ["rw1","rw2","cf1","cf2","lw1","lw2","cm","gk"];
+    return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
   }
 
   return ["rw","cf","cm","gk","lw"]; // default
 }
 
 // =========================
-// POSICIONES DINÁMICAS
+// POSICIONES
 // =========================
 function getPositionCoords(pos) {
-
-  // duplicados (8+)
-  if (pos.startsWith("rw")) {
-    let n = parseInt(pos.replace("rw","")) || 1;
-    return { x: WIDTH / 2 + (n-1)*220 - 110, y: 120 };
-  }
-
-  if (pos.startsWith("cf")) {
-    let n = parseInt(pos.replace("cf","")) || 1;
-    return { x: 250, y: HEIGHT / 2 + (n-1)*140 - 70 };
-  }
-
-  if (pos.startsWith("lw")) {
-    let n = parseInt(pos.replace("lw","")) || 1;
-    return { x: WIDTH / 2 + (n-1)*220 - 110, y: HEIGHT - 160 };
-  }
-
   return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
 }
 
@@ -87,17 +76,6 @@ app.get("/formation", async (req, res) => {
 
     const formationType = req.query.type;
     let activePositions = getFormation(formationType);
-
-    // 🔥 detectar extras automáticamente (rw3, cf3...)
-    Object.keys(req.query).forEach(key => {
-      let match = key.match(/(rw|cf|lw)[0-9]+Name/);
-      if (match) {
-        let pos = match[1] + key.match(/[0-9]+/)[0];
-        if (!activePositions.includes(pos)) {
-          activePositions.push(pos);
-        }
-      }
-    });
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -147,11 +125,14 @@ app.get("/formation", async (req, res) => {
     // =========================
     for (const pos of activePositions) {
 
-      let baseKey = pos.replace(/[0-9]/g, "");
+      let avatarURL = decode(req.query[pos + "Avatar"]);
+      let name = decode(req.query[pos + "Name"]);
+      let style = decode(req.query[pos + "Style"]);
 
-      let avatarURL = decode(req.query[baseKey + "Avatar"]);
-      let name = decode(req.query[baseKey + "Name"]);
-      let style = decode(req.query[baseKey + "Style"]);
+      // fallback a sistema viejo (compatibilidad TOTAL)
+      if (!name) name = decode(req.query[pos.replace("d","") + "Name"]);
+      if (!style) style = decode(req.query[pos.replace("d","") + "Style"]);
+      if (!avatarURL) avatarURL = decode(req.query[pos.replace("d","") + "Avatar"]);
 
       if (!name) name = "?";
       if (!style) style = "?";
@@ -161,20 +142,15 @@ app.get("/formation", async (req, res) => {
       const size = 170;
 
       let hasPlayer = (name !== "?" || avatarURL !== DEFAULT_AVATAR);
-
       let statusColor = hasPlayer ? "#00e676" : "#ff5252";
 
-      // =====================
-      // ARO
-      // =====================
+      // aro
       ctx.beginPath();
       ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
       ctx.fillStyle = statusColor;
       ctx.fill();
 
-      // =====================
-      // AVATAR
-      // =====================
+      // avatar
       if (hasPlayer) {
         const avatar = await loadAvatar(avatarURL);
         if (avatar) {
@@ -193,9 +169,7 @@ app.get("/formation", async (req, res) => {
       ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // =====================
-      // TEXTO
-      // =====================
+      // texto
       if (hasPlayer) {
         ctx.textAlign = "center";
         ctx.strokeStyle = "black";
