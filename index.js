@@ -11,27 +11,64 @@ const WIDTH = 1600;
 const HEIGHT = 1000;
 
 // =========================
-// POSICIONES BASE (MEJORADAS)
+// POSICIONES BASE
 // =========================
-const positions = {
-  rw: { x: WIDTH / 2 - 110, y: 120 },
-  drw: { x: WIDTH / 2 + 110, y: 120 },
-
-  cf: { x: 250, y: HEIGHT / 2 - 120 },   // 🔥 separado
-  dcf: { x: 250, y: HEIGHT / 2 + 120 },  // 🔥 separado
-
-  lw: { x: WIDTH / 2 - 110, y: HEIGHT - 160 },
-  dlw: { x: WIDTH / 2 + 110, y: HEIGHT - 160 },
-
+const basePositions = {
+  rw: { x: WIDTH / 2, y: 120 },
+  cf: { x: 250, y: HEIGHT / 2 },
   cm: { x: WIDTH / 2, y: HEIGHT / 2 },
-  gk: { x: WIDTH - 220, y: HEIGHT / 2 }
+  gk: { x: WIDTH - 220, y: HEIGHT / 2 },
+  lw: { x: WIDTH / 2, y: HEIGHT - 160 }
 };
 
+// =========================
+// FORMACIONES
+// =========================
 function getFormation(type) {
+
+  if (type === "3") return ["rw", "cf", "lw"];
+
+  if (type === "4") return ["rw", "cf", "lw", "gk"];
+
   if (type === "8") {
     return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
   }
-  return ["rw","cf","cm","gk","lw"]; // sistema original intacto
+
+  return ["rw","cf","cm","gk","lw"];
+}
+
+// =========================
+// POSICIONES DINÁMICAS
+// =========================
+function getPositionCoords(pos) {
+
+  // 🔥 NUEVO TYPE 8 (sin números)
+  if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
+  if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
+
+  if (pos === "cf") return { x: 250, y: HEIGHT / 2 - 120 };
+  if (pos === "dcf") return { x: 250, y: HEIGHT / 2 + 120 };
+
+  if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
+  if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
+
+  // 🔥 SISTEMA VIEJO (rw2, cf2...)
+  if (pos.startsWith("rw")) {
+    let n = parseInt(pos.replace("rw","")) || 1;
+    return { x: WIDTH / 2 + (n-1)*220 - 110, y: 120 };
+  }
+
+  if (pos.startsWith("cf")) {
+    let n = parseInt(pos.replace("cf","")) || 1;
+    return { x: 250, y: HEIGHT / 2 + (n-1)*160 - 80 };
+  }
+
+  if (pos.startsWith("lw")) {
+    let n = parseInt(pos.replace("lw","")) || 1;
+    return { x: WIDTH / 2 + (n-1)*220 - 110, y: HEIGHT - 160 };
+  }
+
+  return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
 }
 
 async function loadAvatar(url) {
@@ -55,7 +92,18 @@ app.get("/formation", async (req, res) => {
   try {
 
     const type = req.query.type;
-    const activePositions = getFormation(type);
+    let activePositions = getFormation(type);
+
+    // 🔥 detectar extras dinámicos (rw2, cf3...)
+    Object.keys(req.query).forEach(key => {
+      let match = key.match(/(rw|cf|lw)[0-9]+Name/);
+      if (match) {
+        let pos = match[1] + key.match(/[0-9]+/)[0];
+        if (!activePositions.includes(pos)) {
+          activePositions.push(pos);
+        }
+      }
+    });
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -105,24 +153,21 @@ app.get("/formation", async (req, res) => {
     // =========================
     for (const pos of activePositions) {
 
-      let avatarURL = decode(req.query[pos + "Avatar"]);
-      let name = decode(req.query[pos + "Name"]);
-      let style = decode(req.query[pos + "Style"]);
+      let baseKey = pos.replace(/[0-9]/g, "");
 
-      // 🔥 compatibilidad vieja
-      if (!name) name = decode(req.query[pos.replace("d","") + "Name"]);
-      if (!style) style = decode(req.query[pos.replace("d","") + "Style"]);
-      if (!avatarURL) avatarURL = decode(req.query[pos.replace("d","") + "Avatar"]);
+      let avatarURL = decode(req.query[pos + "Avatar"]) || decode(req.query[baseKey + "Avatar"]);
+      let name = decode(req.query[pos + "Name"]) || decode(req.query[baseKey + "Name"]);
+      let style = decode(req.query[pos + "Style"]) || decode(req.query[baseKey + "Style"]);
 
       if (!name) name = "?";
       if (!style) style = "?";
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
-      const { x, y } = positions[pos];
+      const { x, y } = getPositionCoords(pos);
       const size = 170;
 
       // =====================
-      // 🔥 COLOR ESTADO (ARREGLADO)
+      // 🔥 PALETA COMPLETA
       // =====================
       let statusColor = "#ff5252"; // rojo
 
