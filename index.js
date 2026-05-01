@@ -64,6 +64,7 @@ function getPositionCoords(pos) {
   return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
 }
 
+// 🔹 SOLO PARA AVATARES (no tocar)
 async function loadAvatar(url) {
   try {
     const res = await fetch(url);
@@ -101,16 +102,23 @@ app.get("/formation", async (req, res) => {
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // 🏟️ ESTADIO
+    // 🏟️ ESTADIO (FIX REAL)
     // =========================
     let stadium = decode(req.query.stadium) || DEFAULT_STADIUM;
+    let bgLoaded = false;
 
     if (stadium !== "0" && stadium !== "?") {
-      const bg = await loadAvatar(stadium);
-      if (bg) {
-        ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+      try {
+        const bg = await loadImage(stadium); // 🔥 CAMBIO CLAVE
+        ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT); // 🔥 SIEMPRE CUBRE TODO
+        bgLoaded = true;
+      } catch (e) {
+        bgLoaded = false;
       }
-    } else {
+    }
+
+    // 🔥 fallback SIEMPRE (evita fondo transparente)
+    if (!bgLoaded) {
       const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
       grad.addColorStop(0, "#3a9d23");
       grad.addColorStop(1, "#2e7d32");
