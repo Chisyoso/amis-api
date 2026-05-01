@@ -33,7 +33,7 @@ function getFormation(type) {
 }
 
 // =========================
-// POSICIONES DINÁMICAS
+// POSICIONES
 // =========================
 function getPositionCoords(pos) {
 
@@ -64,13 +64,23 @@ function getPositionCoords(pos) {
   return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
 }
 
-// 🔹 SOLO PARA AVATARES (no tocar)
-async function loadAvatar(url) {
+// =========================
+// 🔥 CARGADOR UNIVERSAL (CLAVE)
+// =========================
+async function loadImageSafe(url) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+
+    if (!res.ok) throw new Error("Bad response");
+
     const buffer = await res.buffer();
     return await loadImage(buffer);
-  } catch {
+
+  } catch (e) {
     return null;
   }
 }
@@ -102,23 +112,21 @@ app.get("/formation", async (req, res) => {
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // 🏟️ ESTADIO (FIX REAL)
+    // 🏟️ ESTADIO (ULTRA ROBUSTO)
     // =========================
     let stadium = decode(req.query.stadium) || DEFAULT_STADIUM;
-    let bgLoaded = false;
 
-    if (stadium !== "0" && stadium !== "?") {
-      try {
-        const bg = await loadImage(stadium); // 🔥 CAMBIO CLAVE
-        ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT); // 🔥 SIEMPRE CUBRE TODO
-        bgLoaded = true;
-      } catch (e) {
-        bgLoaded = false;
-      }
+    let bg = null;
+
+    if (stadium !== "0" && stadium !== "?" && stadium !== "") {
+      bg = await loadImageSafe(stadium);
     }
 
-    // 🔥 fallback SIEMPRE (evita fondo transparente)
-    if (!bgLoaded) {
+    if (bg) {
+      // 🔥 cubrir SIEMPRE TODO (aunque la imagen sea pequeña)
+      ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+    } else {
+      // fallback seguro
       const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
       grad.addColorStop(0, "#3a9d23");
       grad.addColorStop(1, "#2e7d32");
@@ -132,29 +140,6 @@ app.get("/formation", async (req, res) => {
             : "rgba(0,0,0,0.04)";
         ctx.fillRect(i, 0, 80, HEIGHT);
       }
-
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 5;
-
-      ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-      ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
-      ctx.beginPath();
-      ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
-      ctx.fillStyle = "white";
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
-      ctx.stroke();
-
-      ctx.fillStyle = "#e0e0e0";
-      ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
-
-      ctx.beginPath();
-      ctx.moveTo(WIDTH - 350, 100);
-      ctx.lineTo(WIDTH - 350, HEIGHT - 100);
-      ctx.stroke();
     }
 
     // =========================
@@ -187,7 +172,7 @@ app.get("/formation", async (req, res) => {
       ctx.fillStyle = statusColor;
       ctx.fill();
 
-      const avatar = await loadAvatar(avatarURL);
+      const avatar = await loadImageSafe(avatarURL);
       if (avatar) {
         ctx.save();
         ctx.beginPath();
