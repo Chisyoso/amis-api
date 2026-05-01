@@ -3,6 +3,7 @@ const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
 
 const DEFAULT_AVATAR = "https://i.imgur.com/5hxFpJV.png";
+const DEFAULT_STADIUM = "0";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,15 +26,9 @@ const basePositions = {
 // FORMACIONES
 // =========================
 function getFormation(type) {
-
   if (type === "3") return ["rw", "cf", "lw"];
-
   if (type === "4") return ["rw", "cf", "lw", "gk"];
-
-  if (type === "8") {
-    return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
-  }
-
+  if (type === "8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
   return ["rw","cf","cm","gk","lw"];
 }
 
@@ -42,7 +37,6 @@ function getFormation(type) {
 // =========================
 function getPositionCoords(pos) {
 
-  // 🔥 NUEVO TYPE 8 (sin números)
   if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
   if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
 
@@ -52,7 +46,6 @@ function getPositionCoords(pos) {
   if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
   if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
 
-  // 🔥 SISTEMA VIEJO (rw2, cf2...)
   if (pos.startsWith("rw")) {
     let n = parseInt(pos.replace("rw","")) || 1;
     return { x: WIDTH / 2 + (n-1)*220 - 110, y: 120 };
@@ -94,7 +87,6 @@ app.get("/formation", async (req, res) => {
     const type = req.query.type;
     let activePositions = getFormation(type);
 
-    // 🔥 detectar extras dinámicos (rw2, cf3...)
     Object.keys(req.query).forEach(key => {
       let match = key.match(/(rw|cf|lw)[0-9]+Name/);
       if (match) {
@@ -109,44 +101,53 @@ app.get("/formation", async (req, res) => {
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // CÉSPED
+    // 🏟️ ESTADIO
     // =========================
-    const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-    grad.addColorStop(0, "#3a9d23");
-    grad.addColorStop(1, "#2e7d32");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    let stadium = decode(req.query.stadium) || DEFAULT_STADIUM;
 
-    for (let i = 0; i < WIDTH; i += 80) {
-      ctx.fillStyle =
-        i % 160 === 0
-          ? "rgba(255,255,255,0.04)"
-          : "rgba(0,0,0,0.04)";
-      ctx.fillRect(i, 0, 80, HEIGHT);
+    if (stadium !== "0" && stadium !== "?") {
+      const bg = await loadAvatar(stadium);
+      if (bg) {
+        ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+      }
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      grad.addColorStop(0, "#3a9d23");
+      grad.addColorStop(1, "#2e7d32");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      for (let i = 0; i < WIDTH; i += 80) {
+        ctx.fillStyle =
+          i % 160 === 0
+            ? "rgba(255,255,255,0.04)"
+            : "rgba(0,0,0,0.04)";
+        ctx.fillRect(i, 0, 80, HEIGHT);
+      }
+
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 5;
+
+      ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
+      ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
+
+      ctx.beginPath();
+      ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
+      ctx.stroke();
+
+      ctx.fillStyle = "#e0e0e0";
+      ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
+
+      ctx.beginPath();
+      ctx.moveTo(WIDTH - 350, 100);
+      ctx.lineTo(WIDTH - 350, HEIGHT - 100);
+      ctx.stroke();
     }
-
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 5;
-
-    ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-    ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
-    ctx.beginPath();
-    ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "white";
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
-    ctx.stroke();
-
-    ctx.fillStyle = "#e0e0e0";
-    ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
-
-    ctx.beginPath();
-    ctx.moveTo(WIDTH - 350, 100);
-    ctx.lineTo(WIDTH - 350, HEIGHT - 100);
-    ctx.stroke();
 
     // =========================
     // JUGADORES
@@ -166,24 +167,18 @@ app.get("/formation", async (req, res) => {
       const { x, y } = getPositionCoords(pos);
       const size = 170;
 
-      // =====================
-      // 🔥 PALETA COMPLETA
-      // =====================
-      let statusColor = "#ff5252"; // rojo
-
+      let statusColor = "#ff5252";
       if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
-        statusColor = "#00e676"; // verde
+        statusColor = "#00e676";
       } else if (style !== "?") {
-        statusColor = "#ffd600"; // amarillo
+        statusColor = "#ffd600";
       }
 
-      // aro
       ctx.beginPath();
       ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
       ctx.fillStyle = statusColor;
       ctx.fill();
 
-      // avatar
       const avatar = await loadAvatar(avatarURL);
       if (avatar) {
         ctx.save();
@@ -194,13 +189,11 @@ app.get("/formation", async (req, res) => {
         ctx.restore();
       }
 
-      // sombra
       ctx.fillStyle = "rgba(0,0,0,0.25)";
       ctx.beginPath();
       ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // texto
       ctx.textAlign = "center";
       ctx.strokeStyle = "black";
       ctx.fillStyle = "white";
