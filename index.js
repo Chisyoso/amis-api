@@ -2,7 +2,7 @@ const express = require("express");
 const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
 
-const DEFAULT_AVATAR = "https://i.imgur.com/5hxFpJV.png";
+const DEFAULT_AVATAR = "https://i.imgur.com/4jduEyb.png";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
