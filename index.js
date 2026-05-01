@@ -3,7 +3,6 @@ const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
 
 const DEFAULT_AVATAR = "https://i.imgur.com/5hxFpJV.png";
-const DEFAULT_STADIUM = "0";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,28 +64,59 @@ function getPositionCoords(pos) {
 }
 
 // =========================
-// 🔥 CARGADOR UNIVERSAL (CLAVE)
+// CARGADOR UNIVERSAL
 // =========================
 async function loadImageSafe(url) {
   try {
     const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+      headers: { "User-Agent": "Mozilla/5.0" }
     });
-
-    if (!res.ok) throw new Error("Bad response");
-
+    if (!res.ok) throw new Error();
     const buffer = await res.buffer();
     return await loadImage(buffer);
-
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
 function decode(v) {
   return decodeURIComponent(v || "");
+}
+
+// =========================
+// DIBUJAR CANCHA (SIEMPRE)
+// =========================
+function drawFieldLines(ctx) {
+
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 5;
+
+  // área grande
+  ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
+
+  // área chica
+  ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
+
+  // punto penal
+  ctx.beginPath();
+  ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+
+  // 🔥 MEDIA LUNA (SIEMPRE)
+  ctx.beginPath();
+  ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
+  ctx.stroke();
+
+  // portería
+  ctx.fillStyle = "#e0e0e0";
+  ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
+
+  // línea lateral
+  ctx.beginPath();
+  ctx.moveTo(WIDTH - 350, 100);
+  ctx.lineTo(WIDTH - 350, HEIGHT - 100);
+  ctx.stroke();
 }
 
 // =========================
@@ -112,21 +142,24 @@ app.get("/formation", async (req, res) => {
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // 🏟️ ESTADIO (ULTRA ROBUSTO)
+    // ESTADIO
     // =========================
-    let stadium = decode(req.query.stadium) || DEFAULT_STADIUM;
-
+    let stadium = decode(req.query.stadium);
     let bg = null;
 
-    if (stadium !== "0" && stadium !== "?" && stadium !== "") {
+    if (stadium && stadium !== "0" && stadium !== "?") {
       bg = await loadImageSafe(stadium);
     }
 
     if (bg) {
-      // 🔥 cubrir SIEMPRE TODO (aunque la imagen sea pequeña)
       ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+
+      // overlay oscuro para que se vean bien las líneas
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
     } else {
-      // fallback seguro
+      // césped mejorado
       const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
       grad.addColorStop(0, "#3a9d23");
       grad.addColorStop(1, "#2e7d32");
@@ -136,11 +169,14 @@ app.get("/formation", async (req, res) => {
       for (let i = 0; i < WIDTH; i += 80) {
         ctx.fillStyle =
           i % 160 === 0
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(0,0,0,0.04)";
+            ? "rgba(255,255,255,0.05)"
+            : "rgba(0,0,0,0.05)";
         ctx.fillRect(i, 0, 80, HEIGHT);
       }
     }
+
+    // 🔥 SIEMPRE dibuja líneas
+    drawFieldLines(ctx);
 
     // =========================
     // JUGADORES
@@ -182,11 +218,13 @@ app.get("/formation", async (req, res) => {
         ctx.restore();
       }
 
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      // sombra
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
       ctx.beginPath();
       ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // texto
       ctx.textAlign = "center";
       ctx.strokeStyle = "black";
       ctx.fillStyle = "white";
