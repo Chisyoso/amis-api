@@ -3,6 +3,7 @@ const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
 
 const DEFAULT_AVATAR = "https://i.imgur.com/4jduEyb.png";
+const NEW_BG_5V5 = "https://i.imgur.com/dRSz8QM.png";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,7 +29,7 @@ function getFormation(type) {
   if (type === "3") return ["rw", "cf", "lw"];
   if (type === "4") return ["rw", "cf", "lw", "gk"];
   if (type === "8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
-  return ["rw","cf","cm","gk","lw"];
+  return ["rw","cf","cm","gk","lw"]; // 5v5
 }
 
 // =========================
@@ -45,32 +46,15 @@ function getPositionCoords(pos) {
   if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
   if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
 
-  if (pos.startsWith("rw")) {
-    let n = parseInt(pos.replace("rw","")) || 1;
-    return { x: WIDTH / 2 + (n-1)*220 - 110, y: 120 };
-  }
-
-  if (pos.startsWith("cf")) {
-    let n = parseInt(pos.replace("cf","")) || 1;
-    return { x: 250, y: HEIGHT / 2 + (n-1)*160 - 80 };
-  }
-
-  if (pos.startsWith("lw")) {
-    let n = parseInt(pos.replace("lw","")) || 1;
-    return { x: WIDTH / 2 + (n-1)*220 - 110, y: HEIGHT - 160 };
-  }
-
   return basePositions[pos] || { x: WIDTH/2, y: HEIGHT/2 };
 }
 
 // =========================
-// CARGADOR UNIVERSAL
+// UTIL
 // =========================
 async function loadImageSafe(url) {
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }});
     if (!res.ok) throw new Error();
     const buffer = await res.buffer();
     return await loadImage(buffer);
@@ -83,40 +67,60 @@ function decode(v) {
   return decodeURIComponent(v || "");
 }
 
+function randomColor() {
+  const colors = [
+    "rgba(0,255,200,0.8)",
+    "rgba(0,150,255,0.8)",
+    "rgba(255,80,80,0.8)",
+    "rgba(255,200,0,0.8)",
+    "rgba(180,0,255,0.8)"
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
 // =========================
-// DIBUJAR CANCHA (SIEMPRE)
+// DIBUJAR PLAYER NUEVO (5v5)
 // =========================
-function drawFieldLines(ctx) {
+async function drawPlayerCard(ctx, x, y, avatarURL, name, style) {
 
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 5;
+  const size = 150;
+  const avatar = await loadImageSafe(avatarURL);
 
-  // área grande
-  ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-
-  // área chica
-  ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
-  // punto penal
+  // círculo avatar
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
+  ctx.arc(x, y, size/2, 0, Math.PI*2);
+  ctx.clip();
+
+  if (avatar) {
+    ctx.drawImage(avatar, x - size/2, y - size/2, size, size);
+  }
+
+  ctx.restore();
+
+  // borde suave
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(x, y, size/2, 0, Math.PI*2);
+  ctx.stroke();
+
+  // barra nombre (transparente)
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(x - 80, y + 70, 160, 35);
+
+  ctx.font = "bold 20px Sans";
+  ctx.textAlign = "center";
   ctx.fillStyle = "white";
-  ctx.fill();
+  ctx.fillText(name, x, y + 95);
 
-  // 🔥 MEDIA LUNA (SIEMPRE)
-  ctx.beginPath();
-  ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
-  ctx.stroke();
+  // badge estilo
+  ctx.fillStyle = randomColor();
+  ctx.fillRect(x + 50, y - 20, 70, 35);
 
-  // portería
-  ctx.fillStyle = "#e0e0e0";
-  ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
-
-  // línea lateral
-  ctx.beginPath();
-  ctx.moveTo(WIDTH - 350, 100);
-  ctx.lineTo(WIDTH - 350, HEIGHT - 100);
-  ctx.stroke();
+  ctx.fillStyle = "white";
+  ctx.font = "bold 16px Sans";
+  ctx.fillText(style, x + 85, y + 5);
 }
 
 // =========================
@@ -128,55 +132,30 @@ app.get("/formation", async (req, res) => {
     const type = req.query.type;
     let activePositions = getFormation(type);
 
-    Object.keys(req.query).forEach(key => {
-      let match = key.match(/(rw|cf|lw)[0-9]+Name/);
-      if (match) {
-        let pos = match[1] + key.match(/[0-9]+/)[0];
-        if (!activePositions.includes(pos)) {
-          activePositions.push(pos);
-        }
-      }
-    });
-
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // ESTADIO
+    // FONDO
     // =========================
-    let stadium = decode(req.query.stadium);
     let bg = null;
 
-    if (stadium && stadium !== "0" && stadium !== "?") {
-      bg = await loadImageSafe(stadium);
+    // 🔥 SI ES 5v5 → NUEVO DISEÑO
+    if (type == "5") {
+      bg = await loadImageSafe(NEW_BG_5V5);
+    } else {
+      let stadium = decode(req.query.stadium);
+      if (stadium && stadium !== "0" && stadium !== "?") {
+        bg = await loadImageSafe(stadium);
+      }
     }
 
     if (bg) {
       ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
-
-      // overlay oscuro para que se vean bien las líneas
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
     } else {
-      // césped mejorado
-      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-      grad.addColorStop(0, "#3a9d23");
-      grad.addColorStop(1, "#2e7d32");
-      ctx.fillStyle = grad;
+      ctx.fillStyle = "#2e7d32";
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-      for (let i = 0; i < WIDTH; i += 80) {
-        ctx.fillStyle =
-          i % 160 === 0
-            ? "rgba(255,255,255,0.05)"
-            : "rgba(0,0,0,0.05)";
-        ctx.fillRect(i, 0, 80, HEIGHT);
-      }
     }
-
-    // 🔥 SIEMPRE dibuja líneas
-    drawFieldLines(ctx);
 
     // =========================
     // JUGADORES
@@ -194,49 +173,33 @@ app.get("/formation", async (req, res) => {
       if (!avatarURL || avatarURL === "?") avatarURL = DEFAULT_AVATAR;
 
       const { x, y } = getPositionCoords(pos);
-      const size = 170;
 
-      let statusColor = "#ff5252";
-      if (name !== "?" || avatarURL !== DEFAULT_AVATAR) {
-        statusColor = "#00e676";
-      } else if (style !== "?") {
-        statusColor = "#ffd600";
-      }
+      if (type == "5") {
+        await drawPlayerCard(ctx, x, y, avatarURL, name, style);
+      } else {
+        // diseño viejo
+        const size = 170;
 
-      ctx.beginPath();
-      ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
-      ctx.fillStyle = statusColor;
-      ctx.fill();
-
-      const avatar = await loadImageSafe(avatarURL);
-      if (avatar) {
-        ctx.save();
         ctx.beginPath();
         ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-        ctx.restore();
+        ctx.fillStyle = "#00e676";
+        ctx.fill();
+
+        const avatar = await loadImageSafe(avatarURL);
+        if (avatar) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
+          ctx.restore();
+        }
+
+        ctx.fillStyle = "white";
+        ctx.font = "bold 24px Sans";
+        ctx.textAlign = "center";
+        ctx.fillText(name, x, y + 110);
       }
-
-      // sombra
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
-      ctx.beginPath();
-      ctx.ellipse(x, y + size / 2, 60, 18, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // texto
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "black";
-      ctx.fillStyle = "white";
-      ctx.lineWidth = 8;
-
-      ctx.font = "bold 30px Sans";
-      ctx.strokeText(name, x, y + 115);
-      ctx.fillText(name, x, y + 115);
-
-      ctx.font = "22px Sans";
-      ctx.strokeText(style, x, y + 145);
-      ctx.fillText(style, x, y + 145);
     }
 
     res.set("Content-Type", "image/png");
