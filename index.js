@@ -15,7 +15,8 @@ const HEIGHT = 1000;
 // UTILIDADES
 // =========================
 function safeDecode(v) {
-  try { return decodeURIComponent(v || ""); } catch { return v || ""; }
+  try { return decodeURIComponent(v || ""); }
+  catch { return v || ""; }
 }
 
 function hashString(str) {
@@ -38,6 +39,17 @@ function paletteFromSeed(seed) {
   };
 }
 
+function roundedRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
 async function loadImageSafe(url) {
   try {
     const res = await fetch(url);
@@ -51,20 +63,27 @@ async function loadImageSafe(url) {
 // =========================
 // FORMACIONES
 // =========================
+function normalizeType(type) {
+  return String(type || "5").toLowerCase();
+}
+
 function getFormation(type) {
-  if (type == "3") return ["cf","cm","gk"];
-  if (type == "4") return ["cf","rw","lw","gk"];
-  if (type == "5") return ["cf","rw","cm","lw","gk"];
-  if (type == "8") return ["cf","dcf","rw","drw","lw","dlw","cm","gk"];
+  const t = normalizeType(type);
+
+  if (t === "3" || t === "3v3") return ["cf","cm","gk"];
+  if (t === "4" || t === "4v4") return ["cf","rw","lw","gk"];
+  if (t === "5" || t === "5v5") return ["cf","rw","cm","lw","gk"];
+  if (t === "8" || t === "8v8") return ["cf","dcf","rw","drw","lw","dlw","cm","gk"];
+
   return ["cf","rw","cm","lw","gk"];
 }
 
 // =========================
 // POSICIONES (VERTICAL REAL)
 // =========================
-function getPositionCoords(pos) {
+function getPositionCoords(pos, type) {
 
-  // 🔥 SWAPS
+  // 🔥 SWAPS REALES
   if (pos === "rw") pos = "gk";
   else if (pos === "gk") pos = "rw";
 
@@ -72,37 +91,49 @@ function getPositionCoords(pos) {
   else if (pos === "lw") pos = "cf";
 
   // =========================
-  // BASE VERTICAL
+  // ESTRUCTURA VERTICAL
   // =========================
-  if (pos === "cf") return { x: WIDTH / 2, y: 140 };
-  if (pos === "rw") return { x: WIDTH - 260, y: HEIGHT / 2 };
-  if (pos === "lw") return { x: WIDTH / 2, y: HEIGHT - 160 };
-  if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
-  if (pos === "gk") return { x: 260, y: HEIGHT / 2 };
 
-  // =========================
-  // DUPLICADOS (8v8)
-  // =========================
-  if (pos === "drw") return { x: WIDTH - 420, y: HEIGHT / 2 };
-  if (pos === "dcf") return { x: WIDTH / 2, y: 280 };
-  if (pos === "dlw") return { x: WIDTH / 2, y: HEIGHT - 320 };
+  // delantero (ARRIBA)
+  if (pos === "cf") return { x: WIDTH / 2, y: 120 };
+
+  // medio
+  if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
+
+  // defensa (ABAJO)
+  if (pos === "lw") return { x: WIDTH / 2, y: HEIGHT - 140 };
+
+  // laterales (más centrados)
+  if (pos === "rw") return { x: WIDTH - 360, y: HEIGHT / 2 };
+  if (pos === "gk") return { x: 360, y: HEIGHT / 2 };
+
+  // duplicados 8v8
+  if (pos === "drw") return { x: WIDTH - 520, y: HEIGHT / 2 };
+  if (pos === "dcf") return { x: WIDTH / 2, y: 260 };
+  if (pos === "dlw") return { x: WIDTH / 2, y: HEIGHT - 260 };
 
   return { x: WIDTH / 2, y: HEIGHT / 2 };
 }
 
 // =========================
-// JUGADOR NUEVO
+// JUGADOR MODERNO (5v5)
 // =========================
 async function drawPlayer(ctx, player, x, y) {
 
-  const size = 150; // 🔥 MÁS PEQUEÑO
-
+  const size = 170;
   const palette = paletteFromSeed(player.name + player.style);
+
+  // glow
+  ctx.save();
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = 20;
 
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + 12, 0, Math.PI * 2);
   ctx.fillStyle = palette.fill;
   ctx.fill();
+
+  ctx.restore();
 
   const avatar = await loadImageSafe(player.avatar);
   if (avatar) {
@@ -114,18 +145,29 @@ async function drawPlayer(ctx, player, x, y) {
     ctx.restore();
   }
 
-  // estilo badge
-  ctx.fillStyle = palette.stroke;
-  ctx.fillRect(x + 50, y + 10, 80, 40);
+  // sombra
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + size / 2 + 15, 60, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // badge estilo
+  const badgeW = 110;
+  const badgeH = 45;
+
+  roundedRect(ctx, x + 40, y + 20, badgeW, badgeH, 12);
+  ctx.fillStyle = palette.fill;
+  ctx.fill();
 
   ctx.fillStyle = "white";
-  ctx.font = "20px Sans";
-  ctx.fillText(player.style, x + 90, y + 35);
+  ctx.font = "bold 20px Sans";
+  ctx.fillText(player.style, x + 95, y + 50);
 
   // nombre
-  ctx.font = "bold 26px Sans";
+  ctx.font = "bold 28px Sans";
   ctx.textAlign = "center";
-  ctx.fillText(player.name, x, y + 100);
+  ctx.fillStyle = "white";
+  ctx.fillText(player.name, x, y + 110);
 }
 
 // =========================
@@ -134,8 +176,8 @@ async function drawPlayer(ctx, player, x, y) {
 app.get("/formation", async (req, res) => {
   try {
 
-    const type = req.query.type || "5";
-    const positions = getFormation(type);
+    const type = normalizeType(req.query.type);
+    let positions = getFormation(type);
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -146,7 +188,7 @@ app.get("/formation", async (req, res) => {
     let stadium = safeDecode(req.query.stadium);
     let bg = null;
 
-    if (stadium && stadium !== "0") {
+    if (stadium && stadium !== "0" && stadium !== "?") {
       bg = await loadImageSafe(stadium);
     }
 
@@ -158,8 +200,8 @@ app.get("/formation", async (req, res) => {
       ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
     }
 
-    ctx.fillStyle = "rgba(0,0,0,0.1)";
-    ctx.fillRect(0,0,WIDTH,HEIGHT);
+    ctx.fillStyle = "rgba(0,0,0,0.08)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
     // =========================
     // JUGADORES
@@ -172,7 +214,7 @@ app.get("/formation", async (req, res) => {
         style: safeDecode(req.query[pos + "Style"]) || "?"
       };
 
-      const { x, y } = getPositionCoords(pos);
+      const { x, y } = getPositionCoords(pos, type);
 
       await drawPlayer(ctx, player, x, y);
     }
@@ -180,10 +222,10 @@ app.get("/formation", async (req, res) => {
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer());
 
-  } catch (e) {
-    console.log(e);
-    res.status(500).send("error");
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("Error generando imagen");
   }
 });
 
-app.listen(PORT, () => console.log("API lista"));
+app.listen(PORT, () => console.log("API estadio PRO lista 🏟️🔥"));
