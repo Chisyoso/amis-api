@@ -98,10 +98,10 @@ function getPositionCoords(pos, type) {
 
   if (t === "5" || t === "5v5") {
     if (pos === "cf") return { x: 800, y: 165 };
-    if (pos === "rw") return { x: 370, y: 400 };
+    if (pos === "rw") return { x: 1300, y: 420 };
     if (pos === "cm") return { x: 800, y: 470 };
-    if (pos === "lw") return { x: 800, y: 820 };
-    if (pos === "gk") return { x: 1370, y: 420 };
+    if (pos === "lw") return { x: 370, y: 420 };
+    if (pos === "gk") return { x: 800, y: 820 };
 
     return { x: WIDTH / 2, y: HEIGHT / 2 };
   }
