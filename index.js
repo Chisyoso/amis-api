@@ -32,10 +32,10 @@ function paletteFromSeed(seed) {
   const h = hashString(seed || "?");
   const hue = h % 360;
   return {
-    fill: `hsla(${hue}, 85%, 60%, 0.18)`,
-    stroke: `hsla(${hue}, 90%, 70%, 0.5)`,
+    fill: `hsla(${hue}, 85%, 60%, 0.22)`,
+    stroke: `hsla(${hue}, 90%, 70%, 0.55)`,
     text: `white`,
-    glow: `hsla(${hue}, 90%, 65%, 0.25)`
+    glow: `hsla(${hue}, 90%, 65%, 0.28)`
   };
 }
 
@@ -70,20 +70,20 @@ function normalizeType(type) {
 function getFormation(type) {
   const t = normalizeType(type);
 
-  if (t === "3" || t === "3v3") return ["cf","cm","gk"];
-  if (t === "4" || t === "4v4") return ["cf","rw","lw","gk"];
-  if (t === "5" || t === "5v5") return ["cf","rw","cm","lw","gk"];
-  if (t === "8" || t === "8v8") return ["cf","dcf","rw","drw","lw","dlw","cm","gk"];
+  if (t === "3") return ["rw","cf","lw"];
+  if (t === "4") return ["rw","cf","lw","gk"];
+  if (t === "5") return ["cf","rw","cm","lw","gk"];
+  if (t === "8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
 
   return ["cf","rw","cm","lw","gk"];
 }
 
 // =========================
-// POSICIONES (VERTICAL REAL)
+// 🔥 COORDENADAS CORRECTAS (LO IMPORTANTE)
 // =========================
 function getPositionCoords(pos, type) {
 
-  // 🔥 SWAPS REALES
+  // 🔥 SWAPS
   if (pos === "rw") pos = "gk";
   else if (pos === "gk") pos = "rw";
 
@@ -91,39 +91,38 @@ function getPositionCoords(pos, type) {
   else if (pos === "lw") pos = "cf";
 
   // =========================
-  // ESTRUCTURA VERTICAL
+  // VERTICAL REAL (CORREGIDO)
   // =========================
 
-  // delantero (ARRIBA)
-  if (pos === "cf") return { x: WIDTH / 2, y: 120 };
+  // 🔥 ARRIBA
+  if (pos === "lw") return { x: WIDTH / 2, y: 145 };
 
-  // medio
-  if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
+  // 🔥 MEDIO
+  if (pos === "cm") return { x: WIDTH / 2, y: 430 };
 
-  // defensa (ABAJO)
-  if (pos === "lw") return { x: WIDTH / 2, y: HEIGHT - 140 };
+  // 🔥 ABAJO (CF AHORA AQUÍ)
+  if (pos === "cf") return { x: WIDTH / 2, y: 735 };
 
-  // laterales (más centrados)
-  if (pos === "rw") return { x: WIDTH - 360, y: HEIGHT / 2 };
-  if (pos === "gk") return { x: 360, y: HEIGHT / 2 };
+  // 🔥 LATERALES (MÁS CENTRADOS)
+  if (pos === "rw") return { x: WIDTH - 400, y: HEIGHT / 2 };
+  if (pos === "gk") return { x: 400, y: HEIGHT / 2 };
 
-  // duplicados 8v8
-  if (pos === "drw") return { x: WIDTH - 520, y: HEIGHT / 2 };
-  if (pos === "dcf") return { x: WIDTH / 2, y: 260 };
-  if (pos === "dlw") return { x: WIDTH / 2, y: HEIGHT - 260 };
+  // 🔥 DUPLICADOS (8v8)
+  if (pos === "drw") return { x: WIDTH - 550, y: HEIGHT / 2 };
+  if (pos === "dcf") return { x: WIDTH / 2, y: 300 };
+  if (pos === "dlw") return { x: WIDTH / 2, y: HEIGHT - 300 };
 
   return { x: WIDTH / 2, y: HEIGHT / 2 };
 }
 
 // =========================
-// JUGADOR MODERNO (5v5)
+// JUGADOR
 // =========================
 async function drawPlayer(ctx, player, x, y) {
 
   const size = 170;
   const palette = paletteFromSeed(player.name + player.style);
 
-  // glow
   ctx.save();
   ctx.shadowColor = palette.glow;
   ctx.shadowBlur = 20;
@@ -132,7 +131,6 @@ async function drawPlayer(ctx, player, x, y) {
   ctx.arc(x, y, size / 2 + 12, 0, Math.PI * 2);
   ctx.fillStyle = palette.fill;
   ctx.fill();
-
   ctx.restore();
 
   const avatar = await loadImageSafe(player.avatar);
@@ -145,17 +143,13 @@ async function drawPlayer(ctx, player, x, y) {
     ctx.restore();
   }
 
-  // sombra
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.beginPath();
   ctx.ellipse(x, y + size / 2 + 15, 60, 15, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // badge estilo
-  const badgeW = 110;
-  const badgeH = 45;
-
-  roundedRect(ctx, x + 40, y + 20, badgeW, badgeH, 12);
+  // badge
+  roundedRect(ctx, x + 40, y + 20, 110, 45, 12);
   ctx.fillStyle = palette.fill;
   ctx.fill();
 
@@ -163,10 +157,8 @@ async function drawPlayer(ctx, player, x, y) {
   ctx.font = "bold 20px Sans";
   ctx.fillText(player.style, x + 95, y + 50);
 
-  // nombre
   ctx.font = "bold 28px Sans";
   ctx.textAlign = "center";
-  ctx.fillStyle = "white";
   ctx.fillText(player.name, x, y + 110);
 }
 
@@ -177,14 +169,12 @@ app.get("/formation", async (req, res) => {
   try {
 
     const type = normalizeType(req.query.type);
-    let positions = getFormation(type);
+    const positions = getFormation(type);
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    // =========================
-    // FONDO SIEMPRE IMAGEN
-    // =========================
+    // 🔥 FONDO SIEMPRE IMAGEN
     let stadium = safeDecode(req.query.stadium);
     let bg = null;
 
@@ -203,9 +193,7 @@ app.get("/formation", async (req, res) => {
     ctx.fillStyle = "rgba(0,0,0,0.08)";
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // =========================
-    // JUGADORES
-    // =========================
+    // jugadores
     for (const pos of positions) {
 
       const player = {
@@ -215,7 +203,6 @@ app.get("/formation", async (req, res) => {
       };
 
       const { x, y } = getPositionCoords(pos, type);
-
       await drawPlayer(ctx, player, x, y);
     }
 
