@@ -21,7 +21,7 @@ RUN npm install
 COPY . .
 
 # Puerto
-EXPOSE 3000
+EXPOSE 8080
 
 # Ejecutar
 CMD ["node", "index.js"]
