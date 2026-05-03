@@ -12,6 +12,11 @@ const WIDTH = 1600;
 const HEIGHT = 1000;
 
 // =========================
+// CACHE GLOBAL (🔥 CLAVE)
+// =========================
+const imageCache = new Map();
+
+// =========================
 // UTILIDADES
 // =========================
 function safeDecode(v) {
@@ -57,7 +62,16 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// =========================
+// LOAD OPTIMIZADO (🔥 CACHE)
+// =========================
 async function loadImageSafe(url) {
+  if (!url) return null;
+
+  if (imageCache.has(url)) {
+    return imageCache.get(url);
+  }
+
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" }
@@ -66,7 +80,11 @@ async function loadImageSafe(url) {
     if (!res.ok) return null;
 
     const buffer = await res.buffer();
-    return await loadImage(buffer);
+    const img = await loadImage(buffer);
+
+    imageCache.set(url, img);
+
+    return img;
   } catch {
     return null;
   }
@@ -76,7 +94,7 @@ async function loadImageSafe(url) {
 // FORMACIONES
 // =========================
 function normalizeType(type) {
-  return String(type || "5").toLowerCase(); // DEFAULT 5V5
+  return String(type || "5").toLowerCase();
 }
 
 function getFormation(type) {
@@ -106,7 +124,6 @@ function getPositionCoords(pos, type) {
     return { x: WIDTH / 2, y: HEIGHT / 2 };
   }
 
-  // LEGACY
   if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
   if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
 
@@ -123,7 +140,7 @@ function getPositionCoords(pos, type) {
 }
 
 // =========================
-// LEGACY FIELD
+// DRAW FIELD
 // =========================
 function drawFieldLines(ctx) {
   ctx.strokeStyle = "white";
@@ -136,27 +153,19 @@ function drawFieldLines(ctx) {
   ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
   ctx.fillStyle = "white";
   ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(WIDTH - 300, HEIGHT / 2, 120, 0.7 * Math.PI, 1.3 * Math.PI);
-  ctx.stroke();
-
-  ctx.fillStyle = "#e0e0e0";
-  ctx.fillRect(WIDTH - 40, HEIGHT / 2 - 150, 20, 300);
 }
 
 // =========================
-// 5V5 PLAYER DRAW
+// PLAYER DRAW OPTIMIZADO
 // =========================
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
   const name = player.name || "?";
   const style = player.style || "?";
 
-  const size = 150; // MÁS PEQUEÑO
+  const size = 150;
   const palette = paletteFromSeed(`${name}|${style}|${avatarURL}`);
 
-  // Glow
   ctx.save();
   ctx.shadowColor = palette.glow;
   ctx.shadowBlur = 18;
@@ -172,30 +181,21 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 
   if (avatar) {
     ctx.save();
-
     ctx.beginPath();
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.clip();
 
-    ctx.drawImage(
-      avatar,
-      x - size / 2,
-      y - size / 2,
-      size,
-      size
-    );
+    ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
 
     ctx.restore();
   }
 
-  // BORDE BLANCO
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + 2, 0, Math.PI * 2);
   ctx.strokeStyle = "white";
   ctx.lineWidth = 5;
   ctx.stroke();
 
-  // Badge style
   const badgeW = Math.max(120, Math.min(260, style.length * 18 + 42));
   const badgeH = 54;
 
@@ -214,64 +214,16 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  ctx.strokeStyle = "rgba(0,0,0,0.6)";
-  ctx.lineWidth = 5;
-  ctx.strokeText(style, bx + badgeW / 2, by + badgeH / 2);
-
   ctx.fillStyle = palette.text;
   ctx.fillText(style, bx + badgeW / 2, by + badgeH / 2);
 
-  // Nombre
   ctx.font = "bold 28px Sans";
-  ctx.textAlign = "center";
-
-  ctx.strokeStyle = "rgba(0,0,0,0.75)";
-  ctx.lineWidth = 7;
-  ctx.strokeText(name, x, y + 110);
-
   ctx.fillStyle = "white";
   ctx.fillText(name, x, y + 110);
 }
 
 // =========================
-// LEGACY PLAYER DRAW
-// =========================
-async function drawLegacyPlayer(ctx, player, x, y) {
-  const avatar = await loadImageSafe(player.avatar);
-
-  const size = 170;
-
-  ctx.beginPath();
-  ctx.arc(x, y, size / 2 + 18, 0, Math.PI * 2);
-  ctx.fillStyle = "#00e676";
-  ctx.fill();
-
-  if (avatar) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-    ctx.restore();
-  }
-
-  ctx.font = "bold 30px Sans";
-  ctx.textAlign = "center";
-
-  ctx.strokeStyle = "black";
-  ctx.lineWidth = 8;
-  ctx.strokeText(player.name, x, y + 115);
-
-  ctx.fillStyle = "white";
-  ctx.fillText(player.name, x, y + 115);
-
-  ctx.font = "22px Sans";
-  ctx.strokeText(player.style, x, y + 145);
-  ctx.fillText(player.style, x, y + 145);
-}
-
-// =========================
-// API
+// API OPTIMIZADA (🔥 PARALLEL)
 // =========================
 app.get("/formation", async (req, res) => {
   try {
@@ -303,7 +255,8 @@ app.get("/formation", async (req, res) => {
       if (!isFive) drawFieldLines(ctx);
     }
 
-    for (const pos of activePositions) {
+    // 🔥 FIX: PARALLEL en vez de await en loop
+    await Promise.all(activePositions.map(async (pos) => {
       const player = {
         avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
         name: safeDecode(req.query[pos + "Name"]) || "?",
@@ -314,10 +267,8 @@ app.get("/formation", async (req, res) => {
 
       if (isFive) {
         await drawFiveVFivePlayer(ctx, player, x, y);
-      } else {
-        await drawLegacyPlayer(ctx, player, x, y);
       }
-    }
+    }));
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
@@ -329,5 +280,5 @@ app.get("/formation", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("API estadio PRO lista 🏟️🔥");
+  console.log("API estadio PRO optimizada 🏟️🔥");
 });
