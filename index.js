@@ -6,7 +6,7 @@ const DEFAULT_AVATAR = "https://i.imgur.com/4jduEyb.png";
 const DEFAULT_5V5_BG = "https://i.imgur.com/dRSz8QM.png";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 const WIDTH = 1600;
 const HEIGHT = 1000;
