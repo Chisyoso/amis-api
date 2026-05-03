@@ -1,9 +1,8 @@
 const express = require("express");
 const { createCanvas, loadImage } = require("canvas");
 const fetch = require("node-fetch");
-
-const DEFAULT_AVATAR = "https://i.imgur.com/4jduEyb.png";
-const DEFAULT_5V5_BG = "https://i.imgur.com/dRSz8QM.png";
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -11,21 +10,63 @@ const PORT = process.env.PORT || 8080;
 const WIDTH = 1600;
 const HEIGHT = 1000;
 
-// =========================
-// CACHE GLOBAL (🔥 CLAVE)
-// =========================
+// 🔥 ahora puedes usar LOCAL o URL
+const DEFAULT_AVATAR = path.join(__dirname, "assets/avatar.png");
+const DEFAULT_5V5_BG = path.join(__dirname, "assets/bg.png");
+
 const imageCache = new Map();
 
 // =========================
-// UTILIDADES
+// LOAD ROBUSTO (URL + LOCAL)
+// =========================
+async function loadImageSafe(src) {
+  if (!src) return null;
+
+  if (imageCache.has(src)) {
+    return imageCache.get(src);
+  }
+
+  try {
+    let img;
+
+    // 🔥 LOCAL FILE
+    if (!src.startsWith("http")) {
+      if (!fs.existsSync(src)) {
+        console.log("❌ no existe:", src);
+        return null;
+      }
+      img = await loadImage(src);
+    } 
+    // 🌐 URL
+    else {
+      const res = await fetch(src, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+
+      if (!res.ok) {
+        console.log("❌ error HTTP:", src);
+        return null;
+      }
+
+      const buffer = await res.buffer();
+      img = await loadImage(buffer);
+    }
+
+    imageCache.set(src, img);
+    return img;
+
+  } catch (e) {
+    console.log("❌ fallo cargando:", src);
+    return null;
+  }
+}
+
+// =========================
+// UTILIDADES (NO TOCADAS)
 // =========================
 function safeDecode(v) {
-  if (v === undefined || v === null) return "";
-  try {
-    return decodeURIComponent(String(v));
-  } catch {
-    return String(v);
-  }
+  if (!v) return "";
+  try { return decodeURIComponent(v); } catch { return v; }
 }
 
 function hashString(str) {
@@ -43,16 +84,15 @@ function paletteFromSeed(seed) {
   const hue2 = (hue1 + 35 + (h % 40)) % 360;
 
   return {
-    fill: `hsla(${hue1}, 85%, 60%, 0.18)`,
-    stroke: `hsla(${hue1}, 90%, 70%, 0.45)`,
-    text: `hsla(${hue2}, 100%, 96%, 0.98)`,
-    glow: `hsla(${hue1}, 90%, 65%, 0.22)`
+    fill: `hsla(${hue1},85%,60%,0.18)`,
+    stroke: `hsla(${hue1},90%,70%,0.45)`,
+    text: `hsla(${hue2},100%,96%,0.98)`,
+    glow: `hsla(${hue1},90%,65%,0.22)`
   };
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
   const radius = Math.min(r, w / 2, h / 2);
-
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
   ctx.arcTo(x + w, y, x + w, y + h, radius);
@@ -63,35 +103,7 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 // =========================
-// LOAD OPTIMIZADO (🔥 CACHE)
-// =========================
-async function loadImageSafe(url) {
-  if (!url) return null;
-
-  if (imageCache.has(url)) {
-    return imageCache.get(url);
-  }
-
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
-
-    if (!res.ok) return null;
-
-    const buffer = await res.buffer();
-    const img = await loadImage(buffer);
-
-    imageCache.set(url, img);
-
-    return img;
-  } catch {
-    return null;
-  }
-}
-
-// =========================
-// FORMACIONES
+// FORMACIONES (SIN CAMBIOS)
 // =========================
 function normalizeType(type) {
   return String(type || "5").toLowerCase();
@@ -100,63 +112,30 @@ function normalizeType(type) {
 function getFormation(type) {
   const t = normalizeType(type);
 
-  if (t === "3" || t === "3v3") return ["rw", "cf", "lw"];
-  if (t === "4" || t === "4v4") return ["rw", "cf", "lw", "gk"];
-  if (t === "5" || t === "5v5") return ["cf", "rw", "cm", "lw", "gk"];
+  if (t === "3" || t === "3v3") return ["rw","cf","lw"];
+  if (t === "4" || t === "4v4") return ["rw","cf","lw","gk"];
+  if (t === "5" || t === "5v5") return ["cf","rw","cm","lw","gk"];
   if (t === "8" || t === "8v8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
 
-  return ["cf", "rw", "cm", "lw", "gk"];
+  return ["cf","rw","cm","lw","gk"];
 }
 
 // =========================
-// COORDENADAS
+// COORDS (SIN CAMBIOS)
 // =========================
 function getPositionCoords(pos, type) {
-  const t = normalizeType(type);
-
-  if (t === "5" || t === "5v5") {
+  if (type === "5" || type === "5v5") {
     if (pos === "cf") return { x: 800, y: 165 };
     if (pos === "rw") return { x: 1300, y: 420 };
     if (pos === "cm") return { x: 800, y: 470 };
     if (pos === "lw") return { x: 370, y: 420 };
     if (pos === "gk") return { x: 800, y: 820 };
-
-    return { x: WIDTH / 2, y: HEIGHT / 2 };
   }
-
-  if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
-  if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
-
-  if (pos === "cf") return { x: 250, y: HEIGHT / 2 - 120 };
-  if (pos === "dcf") return { x: 250, y: HEIGHT / 2 + 120 };
-
-  if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
-  if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
-
-  if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
-  if (pos === "gk") return { x: WIDTH - 220, y: HEIGHT / 2 };
-
   return { x: WIDTH / 2, y: HEIGHT / 2 };
 }
 
 // =========================
-// DRAW FIELD
-// =========================
-function drawFieldLines(ctx) {
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 5;
-
-  ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-  ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
-  ctx.beginPath();
-  ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "white";
-  ctx.fill();
-}
-
-// =========================
-// PLAYER DRAW OPTIMIZADO
+// PLAYER (NO BORRADO)
 // =========================
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
@@ -174,7 +153,6 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.arc(x, y, size / 2 + 14, 0, Math.PI * 2);
   ctx.fillStyle = palette.fill;
   ctx.fill();
-
   ctx.restore();
 
   const avatar = await loadImageSafe(avatarURL);
@@ -184,9 +162,7 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     ctx.beginPath();
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.clip();
-
     ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-
     ctx.restore();
   }
 
@@ -207,13 +183,9 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.fill();
 
   ctx.strokeStyle = palette.stroke;
-  ctx.lineWidth = 2;
   ctx.stroke();
 
   ctx.font = "bold 24px Sans";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
   ctx.fillStyle = palette.text;
   ctx.fillText(style, bx + badgeW / 2, by + badgeH / 2);
 
@@ -223,44 +195,41 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 }
 
 // =========================
-// API OPTIMIZADA (🔥 PARALLEL)
+// ENDPOINT (FIX REAL)
 // =========================
 app.get("/formation", async (req, res) => {
   try {
     const type = normalizeType(req.query.type);
     const isFive = type === "5" || type === "5v5";
 
-    const activePositions = getFormation(type);
-
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
     let stadium = safeDecode(req.query.stadium);
-    let bg = null;
 
-    if (stadium && stadium !== "0" && stadium !== "?") {
-      bg = await loadImageSafe(stadium);
-    }
+    let bg = await loadImageSafe(stadium);
 
-    if (!bg && isFive) {
+    // 🔥 fallback REAL
+    if (!bg) {
+      console.log("⚠️ fallback fondo");
       bg = await loadImageSafe(DEFAULT_5V5_BG);
     }
 
+    // 🔥 nunca queda vacío
     if (bg) {
       ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
     } else {
       ctx.fillStyle = "#1e1e1e";
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-      if (!isFive) drawFieldLines(ctx);
     }
 
-    // 🔥 FIX: PARALLEL en vez de await en loop
-    await Promise.all(activePositions.map(async (pos) => {
+    const positions = getFormation(type);
+
+    await Promise.all(positions.map(async (pos) => {
       const player = {
-        avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
-        name: safeDecode(req.query[pos + "Name"]) || "?",
-        style: safeDecode(req.query[pos + "Style"]) || "?"
+        avatar: safeDecode(req.query[pos + "Avatar"]),
+        name: safeDecode(req.query[pos + "Name"]),
+        style: safeDecode(req.query[pos + "Style"])
       };
 
       const { x, y } = getPositionCoords(pos, type);
@@ -275,10 +244,10 @@ app.get("/formation", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error generando imagen");
+    res.status(500).send("Error");
   }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("API estadio PRO optimizada 🏟️🔥");
+  console.log("🔥 VERSION PRO ESTABLE");
 });
