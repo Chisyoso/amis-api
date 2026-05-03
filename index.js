@@ -1,5 +1,6 @@
 const express = require("express");
 const { createCanvas, loadImage } = require("canvas");
+const fetch = require("node-fetch");
 
 const DEFAULT_AVATAR = "https://i.imgur.com/4jduEyb.png";
 const DEFAULT_5V5_BG = "https://i.imgur.com/dRSz8QM.png";
@@ -12,97 +13,151 @@ const HEIGHT = 1000;
 
 const imageCache = new Map();
 
-// SAFE IMAGE LOADER (FLY FIX)
-async function loadImageSafe(url) {
-  if (!url) return null;
-  if (imageCache.has(url)) return imageCache.get(url);
-
+// =========================
+// FETCH ROBUSTO (🔥 CLAVE REAL)
+// =========================
+async function fetchBuffer(url) {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(url, {
+      signal: controller.signal,
       headers: { "User-Agent": "Mozilla/5.0" }
     });
 
-    if (!res.ok) return null;
+    clearTimeout(timeout);
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const img = await loadImage(buffer);
+    if (!res.ok) {
+      console.log("❌ Error HTTP:", url);
+      return null;
+    }
 
-    imageCache.set(url, img);
-    return img;
-
-  } catch {
+    return await res.buffer();
+  } catch (e) {
+    console.log("❌ Fetch fallo:", url);
     return null;
   }
 }
 
-// utils simples
-function safeDecode(v) {
-  try { return decodeURIComponent(String(v || "")); }
-  catch { return String(v || ""); }
+// =========================
+// LOAD IMAGE SEGURO
+// =========================
+async function loadImageSafe(url) {
+  if (!url) return null;
+
+  if (imageCache.has(url)) {
+    return imageCache.get(url);
+  }
+
+  const buffer = await fetchBuffer(url);
+  if (!buffer) return null;
+
+  try {
+    const img = await loadImage(buffer);
+    imageCache.set(url, img);
+    return img;
+  } catch {
+    console.log("❌ Canvas no pudo cargar:", url);
+    return null;
+  }
 }
 
-function normalizeType(t) {
-  return String(t || "5").toLowerCase();
+// =========================
+// UTILS
+// =========================
+function safeDecode(v) {
+  if (!v) return "";
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function normalizeType(type) {
+  return String(type || "5").toLowerCase();
 }
 
 function getFormation(type) {
-  if (type === "3" || type === "3v3") return ["rw","cf","lw"];
-  if (type === "4" || type === "4v4") return ["rw","cf","lw","gk"];
-  if (type === "8" || type === "8v8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
-  return ["cf","rw","cm","lw","gk"];
+  const t = normalizeType(type);
+
+  if (t === "3") return ["rw", "cf", "lw"];
+  if (t === "4") return ["rw", "cf", "lw", "gk"];
+  if (t === "5") return ["cf", "rw", "cm", "lw", "gk"];
+
+  return ["cf", "rw", "cm", "lw", "gk"];
 }
 
-function getPositionCoords(pos) {
+function getCoords(pos) {
   const map = {
     cf: { x: 800, y: 165 },
     rw: { x: 1300, y: 420 },
-    lw: { x: 370, y: 420 },
     cm: { x: 800, y: 470 },
+    lw: { x: 370, y: 420 },
     gk: { x: 800, y: 820 }
   };
-  return map[pos] || { x: WIDTH/2, y: HEIGHT/2 };
+  return map[pos] || { x: 800, y: 500 };
 }
 
-// ROUTE
+// =========================
+// ENDPOINT
+// =========================
 app.get("/formation", async (req, res) => {
   try {
     const type = normalizeType(req.query.type);
-    const formation = getFormation(type);
+    const positions = getFormation(type);
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    let bg = await loadImageSafe(DEFAULT_5V5_BG);
-    if (bg) ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+    let stadium = safeDecode(req.query.stadium);
 
+    // 🔥 INTENTA cargar fondo
+    let bg = await loadImageSafe(stadium);
+
+    // 🔥 FALLBACK FORZADO
+    if (!bg) {
+      console.log("⚠️ usando fondo por defecto");
+      bg = await loadImageSafe(DEFAULT_5V5_BG);
+    }
+
+    // 🔥 SI TODO FALLA → COLOR
+    if (bg) {
+      ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+    } else {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    // jugadores
     await Promise.all(
-      formation.map(async (pos) => {
-        const player = {
-          avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
-          name: safeDecode(req.query[pos + "Name"]) || "?"
-        };
+      positions.map(async (pos) => {
+        const avatar = safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR;
+        const name = safeDecode(req.query[pos + "Name"]) || "?";
 
-        const img = await loadImageSafe(player.avatar);
-        const { x, y } = getPositionCoords(pos);
+        const img = await loadImageSafe(avatar);
+        const { x, y } = getCoords(pos);
 
         if (img) {
-          ctx.drawImage(img, x - 75, y - 75, 150, 150);
+          ctx.drawImage(img, x - 50, y - 50, 100, 100);
         }
 
         ctx.fillStyle = "white";
-        ctx.fillText(player.name, x, y + 100);
+        ctx.fillText(name, x, y + 70);
       })
     );
 
-    res.setHeader("Content-Type", "image/png");
-    res.send(canvas.toBuffer("image/png"));
+    res.set("Content-Type", "image/png");
+    res.send(canvas.toBuffer());
 
   } catch (e) {
     console.error(e);
-    res.status(500).send("error");
+    res.status(500).send("Error");
   }
 });
 
+// 🔥 IMPORTANTE PARA FLY
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("API OK", PORT);
+  console.log("🔥 VERSION FINAL FUNCIONANDO");
 });
