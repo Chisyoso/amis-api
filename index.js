@@ -12,23 +12,19 @@ const WIDTH = 1600;
 const HEIGHT = 1000;
 
 // =========================
-// CACHE (ULTRA IMPORTANTE)
+// CACHE
 // =========================
 const imageCache = new Map();
 const colorCache = new Map();
 
-// =========================
-// RANDOM COLOR (BORDE)
-// =========================
-function randomBorderColor(seed) {
-  if (colorCache.has(seed)) return colorCache.get(seed);
-
-  const h = Math.abs(hashString(seed)) % 360;
-  const color = `hsl(${h}, 100%, 65%)`;
-
-  colorCache.set(seed, color);
-  return color;
-}
+// 🔥 PRELOAD DEL FONDO (CLAVE PARA VELOCIDAD + FIABILIDAD)
+(async () => {
+  try {
+    const img = await loadImage(DEFAULT_5V5_BG);
+    imageCache.set(DEFAULT_5V5_BG, img);
+    console.log("BG precargado ⚡");
+  } catch {}
+})();
 
 // =========================
 // UTILIDADES
@@ -56,8 +52,18 @@ function paletteFromSeed(seed) {
     fill: `hsla(${hue1}, 85%, 60%, 0.18)`,
     stroke: `hsla(${hue1}, 90%, 70%, 0.45)`,
     text: `hsla(${hue2}, 100%, 96%, 0.98)`,
-    glow: `hsla(${hue1}, 90%, 65%, 0.12)` // 🔥 menos blur = más rápido
+    glow: `hsla(${hue1}, 90%, 65%, 0.12)`
   };
+}
+
+function randomBorderColor(seed) {
+  if (colorCache.has(seed)) return colorCache.get(seed);
+
+  const h = Math.abs(hashString(seed)) % 360;
+  const color = `hsl(${h}, 100%, 65%)`;
+
+  colorCache.set(seed, color);
+  return color;
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
@@ -72,7 +78,7 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 // =========================
-// IMAGE CACHE (OPTIMIZADO)
+// IMAGE CACHE OPTIMIZADO
 // =========================
 async function loadImageSafe(url) {
   if (!url) return null;
@@ -139,7 +145,7 @@ function getPositionCoords(pos, type) {
 }
 
 // =========================
-// PLAYER DRAW (ULTRA OPT)
+// PLAYER DRAW
 // =========================
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
@@ -152,7 +158,6 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   const palette = paletteFromSeed(seed);
   const border = randomBorderColor(seed);
 
-  // 🔥 glow reducido (menos CPU)
   ctx.shadowColor = palette.glow;
   ctx.shadowBlur = 10;
 
@@ -174,7 +179,6 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     ctx.restore();
   }
 
-  // 🔥 borde random
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + 2, 0, Math.PI * 2);
   ctx.strokeStyle = border;
@@ -208,7 +212,7 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 }
 
 // =========================
-// API (OPTIMIZADO)
+// API FIXED
 // =========================
 app.get("/formation", async (req, res) => {
   try {
@@ -219,30 +223,42 @@ app.get("/formation", async (req, res) => {
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    let bg = await loadImageSafe(req.query.stadium || DEFAULT_5V5_BG);
+    let bg = null;
 
-    if (bg) ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
-    else {
-      ctx.fillStyle = "#1e1e1e";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    const stadium = req.query.stadium;
+
+    // 🔥 FIX CLAVE: fallback seguro + cache
+    if (stadium && imageCache.has(stadium)) {
+      bg = imageCache.get(stadium);
+    } else if (stadium) {
+      bg = await loadImageSafe(stadium);
+      if (bg) imageCache.set(stadium, bg);
     }
 
-    // 🔥 paralelo REAL optimizado
-    const tasks = positions.map(async (pos) => {
-      const player = {
-        avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
-        name: safeDecode(req.query[pos + "Name"]) || "?",
-        style: safeDecode(req.query[pos + "Style"]) || "?"
-      };
+    if (!bg) {
+      bg = imageCache.get(DEFAULT_5V5_BG);
+    }
 
-      const { x, y } = getPositionCoords(pos, type);
+    if (!bg) {
+      bg = await loadImageSafe(DEFAULT_5V5_BG);
+      imageCache.set(DEFAULT_5V5_BG, bg);
+    }
 
-      if (isFive) {
-        await drawFiveVFivePlayer(ctx, player, x, y);
-      }
-    });
+    ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-    await Promise.all(tasks);
+    await Promise.all(
+      positions.map(async (pos) => {
+        const player = {
+          avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
+          name: safeDecode(req.query[pos + "Name"]) || "?",
+          style: safeDecode(req.query[pos + "Style"]) || "?"
+        };
+
+        const { x, y } = getPositionCoords(pos, type);
+
+        if (isFive) await drawFiveVFivePlayer(ctx, player, x, y);
+      })
+    );
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
@@ -254,5 +270,5 @@ app.get("/formation", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("⚡ API ULTRA OPTIMIZED ONLINE");
+  console.log("⚡ API ULTRA FIXED + FAST + STABLE");
 });
