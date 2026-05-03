@@ -12,20 +12,30 @@ const WIDTH = 1600;
 const HEIGHT = 1000;
 
 // =========================
-// CACHE GLOBAL (🔥 CLAVE)
+// CACHE (ULTRA IMPORTANTE)
 // =========================
 const imageCache = new Map();
+const colorCache = new Map();
+
+// =========================
+// RANDOM COLOR (BORDE)
+// =========================
+function randomBorderColor(seed) {
+  if (colorCache.has(seed)) return colorCache.get(seed);
+
+  const h = Math.abs(hashString(seed)) % 360;
+  const color = `hsl(${h}, 100%, 65%)`;
+
+  colorCache.set(seed, color);
+  return color;
+}
 
 // =========================
 // UTILIDADES
 // =========================
 function safeDecode(v) {
-  if (v === undefined || v === null) return "";
-  try {
-    return decodeURIComponent(String(v));
-  } catch {
-    return String(v);
-  }
+  if (!v) return "";
+  try { return decodeURIComponent(String(v)); } catch { return String(v); }
 }
 
 function hashString(str) {
@@ -40,20 +50,19 @@ function hashString(str) {
 function paletteFromSeed(seed) {
   const h = hashString(seed || "?");
   const hue1 = h % 360;
-  const hue2 = (hue1 + 35 + (h % 40)) % 360;
+  const hue2 = (hue1 + 35) % 360;
 
   return {
     fill: `hsla(${hue1}, 85%, 60%, 0.18)`,
     stroke: `hsla(${hue1}, 90%, 70%, 0.45)`,
     text: `hsla(${hue2}, 100%, 96%, 0.98)`,
-    glow: `hsla(${hue1}, 90%, 65%, 0.22)`
+    glow: `hsla(${hue1}, 90%, 65%, 0.12)` // 🔥 menos blur = más rápido
   };
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
-
   ctx.beginPath();
+  const radius = Math.min(r, w / 2, h / 2);
   ctx.moveTo(x + radius, y);
   ctx.arcTo(x + w, y, x + w, y + h, radius);
   ctx.arcTo(x + w, y + h, x, y + h, radius);
@@ -63,27 +72,21 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 // =========================
-// LOAD OPTIMIZADO (🔥 CACHE)
+// IMAGE CACHE (OPTIMIZADO)
 // =========================
 async function loadImageSafe(url) {
   if (!url) return null;
 
-  if (imageCache.has(url)) {
-    return imageCache.get(url);
-  }
+  if (imageCache.has(url)) return imageCache.get(url);
 
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
-
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res.ok) return null;
 
     const buffer = await res.buffer();
     const img = await loadImage(buffer);
 
     imageCache.set(url, img);
-
     return img;
   } catch {
     return null;
@@ -109,7 +112,7 @@ function getFormation(type) {
 }
 
 // =========================
-// COORDENADAS
+// COORDS
 // =========================
 function getPositionCoords(pos, type) {
   const t = normalizeType(type);
@@ -120,19 +123,15 @@ function getPositionCoords(pos, type) {
     if (pos === "cm") return { x: 800, y: 470 };
     if (pos === "lw") return { x: 370, y: 420 };
     if (pos === "gk") return { x: 800, y: 820 };
-
     return { x: WIDTH / 2, y: HEIGHT / 2 };
   }
 
   if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
   if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
-
   if (pos === "cf") return { x: 250, y: HEIGHT / 2 - 120 };
   if (pos === "dcf") return { x: 250, y: HEIGHT / 2 + 120 };
-
   if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
   if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
-
   if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
   if (pos === "gk") return { x: WIDTH - 220, y: HEIGHT / 2 };
 
@@ -140,23 +139,7 @@ function getPositionCoords(pos, type) {
 }
 
 // =========================
-// DRAW FIELD
-// =========================
-function drawFieldLines(ctx) {
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 5;
-
-  ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-  ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
-  ctx.beginPath();
-  ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "white";
-  ctx.fill();
-}
-
-// =========================
-// PLAYER DRAW OPTIMIZADO
+// PLAYER DRAW (ULTRA OPT)
 // =========================
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
@@ -164,18 +147,21 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   const style = player.style || "?";
 
   const size = 150;
-  const palette = paletteFromSeed(`${name}|${style}|${avatarURL}`);
+  const seed = `${name}|${style}|${avatarURL}`;
 
-  ctx.save();
+  const palette = paletteFromSeed(seed);
+  const border = randomBorderColor(seed);
+
+  // 🔥 glow reducido (menos CPU)
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = 18;
+  ctx.shadowBlur = 10;
 
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + 14, 0, Math.PI * 2);
   ctx.fillStyle = palette.fill;
   ctx.fill();
 
-  ctx.restore();
+  ctx.shadowBlur = 0;
 
   const avatar = await loadImageSafe(avatarURL);
 
@@ -184,25 +170,24 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     ctx.beginPath();
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.clip();
-
     ctx.drawImage(avatar, x - size / 2, y - size / 2, size, size);
-
     ctx.restore();
   }
 
+  // 🔥 borde random
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + 2, 0, Math.PI * 2);
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 5;
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 4;
   ctx.stroke();
 
-  const badgeW = Math.max(120, Math.min(260, style.length * 18 + 42));
-  const badgeH = 54;
+  const badgeW = Math.max(120, Math.min(260, style.length * 16 + 40));
+  const badgeH = 52;
 
   const bx = x + size / 2 - 10;
   const by = y + 25;
 
-  roundedRect(ctx, bx, by, badgeW, badgeH, 15);
+  roundedRect(ctx, bx, by, badgeW, badgeH, 14);
   ctx.fillStyle = palette.fill;
   ctx.fill();
 
@@ -210,53 +195,40 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.font = "bold 24px Sans";
+  ctx.font = "bold 22px Sans";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
   ctx.fillStyle = palette.text;
   ctx.fillText(style, bx + badgeW / 2, by + badgeH / 2);
 
-  ctx.font = "bold 28px Sans";
+  ctx.font = "bold 26px Sans";
   ctx.fillStyle = "white";
   ctx.fillText(name, x, y + 110);
 }
 
 // =========================
-// API OPTIMIZADA (🔥 PARALLEL)
+// API (OPTIMIZADO)
 // =========================
 app.get("/formation", async (req, res) => {
   try {
     const type = normalizeType(req.query.type);
     const isFive = type === "5" || type === "5v5";
-
-    const activePositions = getFormation(type);
+    const positions = getFormation(type);
 
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    let stadium = safeDecode(req.query.stadium);
-    let bg = null;
+    let bg = await loadImageSafe(req.query.stadium || DEFAULT_5V5_BG);
 
-    if (stadium && stadium !== "0" && stadium !== "?") {
-      bg = await loadImageSafe(stadium);
-    }
-
-    if (!bg && isFive) {
-      bg = await loadImageSafe(DEFAULT_5V5_BG);
-    }
-
-    if (bg) {
-      ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
-    } else {
+    if (bg) ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+    else {
       ctx.fillStyle = "#1e1e1e";
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-      if (!isFive) drawFieldLines(ctx);
     }
 
-    // 🔥 FIX: PARALLEL en vez de await en loop
-    await Promise.all(activePositions.map(async (pos) => {
+    // 🔥 paralelo REAL optimizado
+    const tasks = positions.map(async (pos) => {
       const player = {
         avatar: safeDecode(req.query[pos + "Avatar"]) || DEFAULT_AVATAR,
         name: safeDecode(req.query[pos + "Name"]) || "?",
@@ -268,17 +240,19 @@ app.get("/formation", async (req, res) => {
       if (isFive) {
         await drawFiveVFivePlayer(ctx, player, x, y);
       }
-    }));
+    });
+
+    await Promise.all(tasks);
 
     res.set("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error generando imagen");
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Error");
   }
 });
 
 app.listen(PORT, () => {
-  console.log("API estadio PRO optimizada 🏟️🔥");
+  console.log("⚡ API ULTRA OPTIMIZED ONLINE");
 });
