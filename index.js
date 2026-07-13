@@ -1,43 +1,71 @@
-const express = require("express"); 
+const express = require("express");
+const compression = require("compression"); // 1. COMPRESIÓN HTTP AÑADIDA
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const fetch = require("node-fetch");
 const fs = require("fs");
 const path = require("path");
+const { LRUCache } = require("lru-cache");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-const WIDTH = 1600;
-const HEIGHT = 1000;
+// Activar gzip/deflate para reducir el peso de las respuestas (ideal para el VPS y la red)
+app.use(compression());
+
+const TARGET_WIDTH = 1200;
+const TARGET_HEIGHT = 750;
+const SCALE = TARGET_WIDTH / 1600; 
+
+// 2. CACHÉS REDUCIDOS PARA PROTEGER LA RAM DE 1GB
+const assetCache = new LRUCache({ max: 30, ttl: 1000 * 60 * 10 });
+const responseCache = new LRUCache({ max: 15, ttl: 1000 * 60 * 5 });
 
 registerFont(path.join(__dirname, "assets/fonts/Poppins-Bold.ttf"), { family: "PoppinsBold" });
 registerFont(path.join(__dirname, "assets/fonts/Poppins-Regular.ttf"), { family: "Poppins" });
-
 const DEFAULT_AVATAR = path.join(__dirname, "assets/avatar.png");
 const DEFAULT_5V5_BG = path.join(__dirname, "assets/bg.png");
 
-const imageCache = new Map();
+// 3. LÍMITE DE TAMAÑO DE DESCARGA (2 MB máximo)
+const MAX_FILE_SIZE = 2 * 1024 * 1024; 
 
 async function loadImageSafe(src) {
   if (!src) return null;
-  if (imageCache.has(src)) return imageCache.get(src);
+  if (assetCache.has(src)) return assetCache.get(src);
 
   try {
     let img;
-
     if (!src.startsWith("http")) {
       if (!fs.existsSync(src)) return null;
       img = await loadImage(src);
     } else {
-      const res = await fetch(src, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetch(src, { 
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      
       if (!res.ok) return null;
+
+      // Proteger la RAM: Leer las cabeceras antes de descargar el buffer
+      const contentLength = res.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
+        console.warn(`[Bloqueado] Imagen superó el límite de 2MB: ${src}`);
+        return null; 
+      }
+
       const buffer = await res.buffer();
+      
+      // Doble validación por si el servidor no envió el content-length
+      if (buffer.length > MAX_FILE_SIZE) return null;
+
       img = await loadImage(buffer);
     }
-
-    imageCache.set(src, img);
+    assetCache.set(src, img);
     return img;
-  } catch {
+  } catch (err) {
     return null;
   }
 }
@@ -68,7 +96,6 @@ function paletteFromSeed(seed) {
   const h = hashString(seed || "?");
   const hue1 = h % 360;
   const hue2 = (hue1 + 35 + (h % 40)) % 360;
-
   return {
     fill: `hsla(${hue1},85%,60%,0.18)`,
     stroke: `hsla(${hue1},90%,70%,0.45)`,
@@ -104,35 +131,34 @@ function getFormation(type) {
 
 function getPositionCoords(pos, type) {
   const t = normalizeType(type);
+  let coords = { x: 800, y: 500 }; 
 
   if (t === "5" || t === "5v5") {
-    if (pos === "cf") return { x: 800, y: 165 };
-    if (pos === "rw") return { x: 1300, y: 420 };
-    if (pos === "cm") return { x: 800, y: 470 };
-    if (pos === "lw") return { x: 370, y: 420 };
-    if (pos === "gk") return { x: 800, y: 820 };
+    if (pos === "cf") coords = { x: 800, y: 165 };
+    else if (pos === "rw") coords = { x: 1300, y: 420 };
+    else if (pos === "cm") coords = { x: 800, y: 470 };
+    else if (pos === "lw") coords = { x: 370, y: 420 };
+    else if (pos === "gk") coords = { x: 800, y: 820 };
+  } else {
+    if (pos === "rw") coords = { x: 1600 / 2 - 110, y: 120 };
+    else if (pos === "drw") coords = { x: 1600 / 2 + 110, y: 120 };
+    else if (pos === "cf") coords = { x: 250, y: 1000 / 2 - 120 };
+    else if (pos === "dcf") coords = { x: 250, y: 1000 / 2 + 120 };
+    else if (pos === "lw") coords = { x: 1600 / 2 - 110, y: 1000 - 160 };
+    else if (pos === "dlw") coords = { x: 1600 / 2 + 110, y: 1000 - 160 };
+    else if (pos === "cm") coords = { x: 1600 / 2, y: 1000 / 2 };
+    else if (pos === "gk") coords = { x: 1600 - 220, y: 1000 / 2 };
   }
-
-  if (pos === "rw") return { x: WIDTH / 2 - 110, y: 120 };
-  if (pos === "drw") return { x: WIDTH / 2 + 110, y: 120 };
-  if (pos === "cf") return { x: 250, y: HEIGHT / 2 - 120 };
-  if (pos === "dcf") return { x: 250, y: HEIGHT / 2 + 120 };
-  if (pos === "lw") return { x: WIDTH / 2 - 110, y: HEIGHT - 160 };
-  if (pos === "dlw") return { x: WIDTH / 2 + 110, y: HEIGHT - 160 };
-  if (pos === "cm") return { x: WIDTH / 2, y: HEIGHT / 2 };
-  if (pos === "gk") return { x: WIDTH - 220, y: HEIGHT / 2 };
-
-  return { x: WIDTH / 2, y: HEIGHT / 2 };
+  return { x: coords.x * SCALE, y: coords.y * SCALE };
 }
 
 function drawFieldLines(ctx) {
   ctx.strokeStyle = "white";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(WIDTH - 350, 100, 300, HEIGHT - 200);
-  ctx.strokeRect(WIDTH - 200, HEIGHT / 2 - 120, 150, 240);
-
+  ctx.lineWidth = 5 * SCALE;
+  ctx.strokeRect((1600 - 350) * SCALE, 100 * SCALE, 300 * SCALE, (1000 - 200) * SCALE);
+  ctx.strokeRect((1600 - 200) * SCALE, (1000 / 2 - 120) * SCALE, 150 * SCALE, 240 * SCALE);
   ctx.beginPath();
-  ctx.arc(WIDTH - 260, HEIGHT / 2, 6, 0, Math.PI * 2);
+  ctx.arc((1600 - 260) * SCALE, (1000 / 2) * SCALE, 6 * SCALE, 0, Math.PI * 2);
   ctx.fillStyle = "white";
   ctx.fill();
 }
@@ -141,22 +167,19 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
   const nameRaw = player.name || "?";
   const styleRaw = player.style || "?";
-
-  const size = 150;
+  const size = 150 * SCALE;
   const palette = paletteFromSeed(`${nameRaw}|${styleRaw}|${avatarURL}`);
-
+  
   ctx.save();
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = 30;
-
+  ctx.shadowBlur = 30 * SCALE;
   ctx.beginPath();
-  ctx.arc(x, y, size / 2 + 14, 0, Math.PI * 2);
+  ctx.arc(x, y, size / 2 + (14 * SCALE), 0, Math.PI * 2);
   ctx.fillStyle = palette.fill;
   ctx.fill();
   ctx.restore();
 
   const avatar = await loadImageSafe(avatarURL);
-
   if (avatar) {
     ctx.save();
     ctx.beginPath();
@@ -167,28 +190,26 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   }
 
   ctx.beginPath();
-  ctx.arc(x, y, size / 2 + 4, 0, Math.PI * 2);
+  ctx.arc(x, y, size / 2 + (4 * SCALE), 0, Math.PI * 2);
   ctx.strokeStyle = palette.strong;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 4 * SCALE;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.arc(x, y, size / 2 + 10, 0, Math.PI * 2);
+  ctx.arc(x, y, size / 2 + (10 * SCALE), 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * SCALE;
   ctx.stroke();
 
-  ctx.font = "bold 24px PoppinsBold";
+  ctx.font = `bold ${Math.round(24 * SCALE)}px PoppinsBold`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const style = truncateText(ctx, styleRaw, 140);
-
-  const boxW = Math.max(110, ctx.measureText(style).width + 40);
-  const boxH = 60;
-
-  const bx = x + size / 2 - 10;
-  const by = y - 40;
+  const style = truncateText(ctx, styleRaw, 140 * SCALE);
+  const boxW = Math.max(110 * SCALE, ctx.measureText(style).width + (40 * SCALE));
+  const boxH = 60 * SCALE;
+  const bx = x + size / 2 - (10 * SCALE);
+  const by = y - (40 * SCALE);
 
   const grad = ctx.createLinearGradient(bx, by, bx, by + boxH);
   grad.addColorStop(0, palette.strong);
@@ -196,38 +217,35 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 
   ctx.save();
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = 20;
-
-  roundedRect(ctx, bx, by, boxW, boxH, 14);
+  ctx.shadowBlur = 20 * SCALE;
+  roundedRect(ctx, bx, by, boxW, boxH, 14 * SCALE);
   ctx.fillStyle = grad;
   ctx.fill();
   ctx.restore();
 
   ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * SCALE;
   ctx.stroke();
 
   ctx.fillStyle = "white";
   ctx.fillText(style, bx + boxW / 2, by + boxH / 2);
 
-  ctx.font = "bold 28px PoppinsBold";
+  ctx.font = `bold ${Math.round(28 * SCALE)}px PoppinsBold`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const name = truncateText(ctx, nameRaw, 260);
-
-  const nameW = ctx.measureText(name).width + 40;
-  const nameH = 50;
-
+  const name = truncateText(ctx, nameRaw, 260 * SCALE);
+  const nameW = ctx.measureText(name).width + (40 * SCALE);
+  const nameH = 50 * SCALE;
   const nx = x - nameW / 2;
-  const ny = y + size / 2 + 20;
+  const ny = y + size / 2 + (20 * SCALE);
 
   ctx.fillStyle = "rgba(0,0,0,0.6)";
-  roundedRect(ctx, nx, ny, nameW, nameH, 14);
+  roundedRect(ctx, nx, ny, nameW, nameH, 14 * SCALE);
   ctx.fill();
 
   ctx.strokeStyle = palette.strong;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * SCALE;
   ctx.stroke();
 
   ctx.fillStyle = "white";
@@ -235,46 +253,54 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 }
 
 app.get("/formation", async (req, res) => {
+  const cacheKey = JSON.stringify(req.query);
+  if (responseCache.has(cacheKey)) {
+    res.set("Content-Type", "image/webp");
+    return res.send(responseCache.get(cacheKey));
+  }
+
   try {
     const type = normalizeType(req.query.type);
     const isFive = type === "5" || type === "5v5";
 
-    const canvas = createCanvas(WIDTH, HEIGHT);
+    const canvas = createCanvas(TARGET_WIDTH, TARGET_HEIGHT);
     const ctx = canvas.getContext("2d");
 
     let bg = await loadImageSafe(safeDecode(req.query.stadium));
     if (!bg) bg = await loadImageSafe(DEFAULT_5V5_BG);
 
     if (bg) {
-      ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(bg, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
     } else {
       ctx.fillStyle = "#111";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillRect(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
       if (!isFive) drawFieldLines(ctx);
     }
 
     const positions = getFormation(type);
-
-    await Promise.all(positions.map(async (pos) => {
+    
+    // 4. RENDERIZADO SECUENCIAL (Evita condiciones de carrera en Canvas)
+    for (const pos of positions) {
       const player = {
         avatar: safeDecode(req.query[pos + "Avatar"]),
         name: safeDecode(req.query[pos + "Name"]),
         style: safeDecode(req.query[pos + "Style"])
       };
-
       const { x, y } = getPositionCoords(pos, type);
       await drawFiveVFivePlayer(ctx, player, x, y);
-    }));
+    }
 
-    res.set("Content-Type", "image/png");
-    res.send(canvas.toBuffer("image/png"));
+    const webpBuffer = canvas.toBuffer("image/webp", { quality: 0.44 });
+    responseCache.set(cacheKey, webpBuffer);
 
+    res.set("Content-Type", "image/webp");
+    res.send(webpBuffer);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error");
+    res.status(500).send("Error generando imagen");
   }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("🔥 VERSION PRO FINAL");
+  console.log("🔥 VERSION PRO: Caching Seguro, Secuencial y Comprimido");
 });
