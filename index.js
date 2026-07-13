@@ -1,4 +1,4 @@
-const express = require("express");
+const express = require("express"); 
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const fetch = require("node-fetch");
 const fs = require("fs");
