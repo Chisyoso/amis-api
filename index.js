@@ -1,5 +1,5 @@
 const express = require("express");
-const compression = require("compression"); // 1. COMPRESIÓN HTTP AÑADIDA
+const compression = require("compression");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const fetch = require("node-fetch");
 const fs = require("fs");
@@ -9,24 +9,22 @@ const { LRUCache } = require("lru-cache");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Activar gzip/deflate para reducir el peso de las respuestas (ideal para el VPS y la red)
 app.use(compression());
 
 const TARGET_WIDTH = 1200;
 const TARGET_HEIGHT = 750;
-const SCALE = TARGET_WIDTH / 1600; 
+const SCALE = TARGET_WIDTH / 1600;
 
-// 2. CACHÉS REDUCIDOS PARA PROTEGER LA RAM DE 1GB
 const assetCache = new LRUCache({ max: 30, ttl: 1000 * 60 * 10 });
 const responseCache = new LRUCache({ max: 15, ttl: 1000 * 60 * 5 });
 
 registerFont(path.join(__dirname, "assets/fonts/Poppins-Bold.ttf"), { family: "PoppinsBold" });
 registerFont(path.join(__dirname, "assets/fonts/Poppins-Regular.ttf"), { family: "Poppins" });
+
 const DEFAULT_AVATAR = path.join(__dirname, "assets/avatar.png");
 const DEFAULT_5V5_BG = path.join(__dirname, "assets/bg.png");
 
-// 3. LÍMITE DE TAMAÑO DE DESCARGA (2 MB máximo)
-const MAX_FILE_SIZE = 2 * 1024 * 1024; 
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 async function loadImageSafe(src) {
   if (!src) return null;
@@ -41,28 +39,27 @@ async function loadImageSafe(src) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch(src, { 
+      const res = await fetch(src, {
         headers: { "User-Agent": "Mozilla/5.0" },
         signal: controller.signal
       });
       clearTimeout(timeout);
-      
+
       if (!res.ok) return null;
 
-      // Proteger la RAM: Leer las cabeceras antes de descargar el buffer
-      const contentLength = res.headers.get('content-length');
+      const contentLength = res.headers.get("content-length");
       if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
         console.warn(`[Bloqueado] Imagen superó el límite de 2MB: ${src}`);
-        return null; 
+        return null;
       }
 
       const buffer = await res.buffer();
-      
-      // Doble validación por si el servidor no envió el content-length
+
       if (buffer.length > MAX_FILE_SIZE) return null;
 
       img = await loadImage(buffer);
     }
+
     assetCache.set(src, img);
     return img;
   } catch (err) {
@@ -72,7 +69,11 @@ async function loadImageSafe(src) {
 
 function safeDecode(v) {
   if (!v) return "";
-  try { return decodeURIComponent(v); } catch { return v; }
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
 }
 
 function truncateText(ctx, text, maxWidth) {
@@ -122,16 +123,16 @@ function normalizeType(type) {
 
 function getFormation(type) {
   const t = normalizeType(type);
-  if (t === "3" || t === "3v3") return ["rw","cf","lw"];
-  if (t === "4" || t === "4v4") return ["rw","cf","lw","gk"];
-  if (t === "5" || t === "5v5") return ["cf","rw","cm","lw","gk"];
-  if (t === "8" || t === "8v8") return ["rw","drw","cf","dcf","lw","dlw","cm","gk"];
-  return ["cf","rw","cm","lw","gk"];
+  if (t === "3" || t === "3v3") return ["rw", "cf", "lw"];
+  if (t === "4" || t === "4v4") return ["rw", "cf", "lw", "gk"];
+  if (t === "5" || t === "5v5") return ["cf", "rw", "cm", "lw", "gk"];
+  if (t === "8" || t === "8v8") return ["rw", "drw", "cf", "dcf", "lw", "dlw", "cm", "gk"];
+  return ["cf", "rw", "cm", "lw", "gk"];
 }
 
 function getPositionCoords(pos, type) {
   const t = normalizeType(type);
-  let coords = { x: 800, y: 500 }; 
+  let coords = { x: 800, y: 500 };
 
   if (t === "5" || t === "5v5") {
     if (pos === "cf") coords = { x: 800, y: 165 };
@@ -149,6 +150,7 @@ function getPositionCoords(pos, type) {
     else if (pos === "cm") coords = { x: 1600 / 2, y: 1000 / 2 };
     else if (pos === "gk") coords = { x: 1600 - 220, y: 1000 / 2 };
   }
+
   return { x: coords.x * SCALE, y: coords.y * SCALE };
 }
 
@@ -163,13 +165,62 @@ function drawFieldLines(ctx) {
   ctx.fill();
 }
 
+function getFirstQuery(reqQuery, keys) {
+  for (const key of keys) {
+    if (reqQuery[key] !== undefined && reqQuery[key] !== null && String(reqQuery[key]).trim() !== "") {
+      return reqQuery[key];
+    }
+  }
+  return "";
+}
+
+function drawContainImage(ctx, img, x, y, boxW, boxH) {
+  const ratio = Math.min(boxW / img.width, boxH / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+}
+
+function drawLevelBadge(ctx, x, y, levelValue) {
+  const levelText = String(levelValue || "").trim();
+  if (!levelText) return;
+
+  ctx.save();
+  ctx.font = `bold ${Math.round(18 * SCALE)}px PoppinsBold`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const textW = ctx.measureText(levelText).width;
+  const diameter = Math.max(34 * SCALE, Math.min(54 * SCALE, textW + 18 * SCALE));
+  const r = diameter / 2;
+
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 10 * SCALE;
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#15b84a";
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 2 * SCALE;
+  ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.stroke();
+
+  ctx.fillStyle = "white";
+  ctx.fillText(levelText, x, y + (1 * SCALE));
+  ctx.restore();
+}
+
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
+  const accessoryURL = player.accessory || "";
+  const levelValue = player.level || "";
   const nameRaw = player.name || "?";
   const styleRaw = player.style || "?";
   const size = 150 * SCALE;
   const palette = paletteFromSeed(`${nameRaw}|${styleRaw}|${avatarURL}`);
-  
+
   ctx.save();
   ctx.shadowColor = palette.glow;
   ctx.shadowBlur = 30 * SCALE;
@@ -189,6 +240,19 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     ctx.restore();
   }
 
+  const accessory = await loadImageSafe(accessoryURL);
+  if (accessory) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    const overlaySize = size * 0.62;
+    drawContainImage(ctx, accessory, x, y, overlaySize, overlaySize);
+
+    ctx.restore();
+  }
+
   ctx.beginPath();
   ctx.arc(x, y, size / 2 + (4 * SCALE), 0, Math.PI * 2);
   ctx.strokeStyle = palette.strong;
@@ -200,6 +264,13 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.lineWidth = 2 * SCALE;
   ctx.stroke();
+
+  drawLevelBadge(
+    ctx,
+    x + (size / 2) + (22 * SCALE),
+    y + (size / 2) - (18 * SCALE),
+    levelValue
+  );
 
   ctx.font = `bold ${Math.round(24 * SCALE)}px PoppinsBold`;
   ctx.textAlign = "center";
@@ -278,14 +349,25 @@ app.get("/formation", async (req, res) => {
     }
 
     const positions = getFormation(type);
-    
-    // 4. RENDERIZADO SECUENCIAL (Evita condiciones de carrera en Canvas)
+
     for (const pos of positions) {
       const player = {
         avatar: safeDecode(req.query[pos + "Avatar"]),
+        accessory: safeDecode(
+          getFirstQuery(req.query, [
+            pos + "AvatarObjet",
+            pos + "AvatarObjeto",
+            pos + "AvatarObject",
+            pos + "Objet",
+            pos + "Objeto",
+            pos + "Object"
+          ])
+        ),
+        level: safeDecode(req.query[pos + "Level"]),
         name: safeDecode(req.query[pos + "Name"]),
         style: safeDecode(req.query[pos + "Style"])
       };
+
       const { x, y } = getPositionCoords(pos, type);
       await drawFiveVFivePlayer(ctx, player, x, y);
     }
