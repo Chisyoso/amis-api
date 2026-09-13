@@ -289,14 +289,13 @@ function drawLevelBadge(ctx, x, y, levelValue, palette) {
 
 async function drawFiveVFivePlayer(ctx, player, x, y) {
   const avatarURL = player.avatar || DEFAULT_AVATAR;
-  const accessoryURL = player.accessory || "";
   const levelValue = player.level || "";
   const nameRaw = player.name || "?";
   const styleRaw = player.style || "?";
   const size = 150 * SCALE;
 
   const palette = paletteFromSeed(
-    `${nameRaw}|${styleRaw}|${avatarURL}|${accessoryURL}`
+    `${nameRaw}|${styleRaw}|${avatarURL}|${player.accessory || ""}`
   );
 
   ctx.save();
@@ -326,21 +325,6 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     );
 
     ctx.restore();
-  }
-
-  const accessory = await loadImageSafe(accessoryURL);
-
-  if (accessory) {
-    const accessoryWidth = accessory.width * SCALE;
-    const accessoryHeight = accessory.height * SCALE;
-
-    ctx.drawImage(
-      accessory,
-      x - accessoryWidth / 2,
-      y - accessoryHeight / 2,
-      accessoryWidth,
-      accessoryHeight
-    );
   }
 
   ctx.save();
@@ -419,6 +403,24 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
     style,
     bx + boxW / 2,
     by + boxH / 2
+  );
+}
+
+async function drawAccessory(ctx, player, x, y) {
+  const accessory = await loadImageSafe(player.accessory || "");
+
+  if (!accessory) return;
+
+  const SCALE_ACCESSORY = SCALE;
+  const accessoryWidth = accessory.width * SCALE_ACCESSORY;
+  const accessoryHeight = accessory.height * SCALE_ACCESSORY;
+
+  ctx.drawImage(
+    accessory,
+    x - accessoryWidth / 2,
+    y - accessoryHeight / 2,
+    accessoryWidth,
+    accessoryHeight
   );
 }
 
@@ -586,6 +588,15 @@ app.get("/formation", async (req, res) => {
         player,
         x,
         y
+      );
+    }
+
+    for (const item of playersToDraw) {
+      await drawAccessory(
+        ctx,
+        item.player,
+        item.x,
+        item.y
       );
     }
 
