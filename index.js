@@ -321,6 +321,27 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
 
   ctx.fillStyle = "white";
   ctx.fillText(name, x, ny + nameH / 2);
+
+  // Nick dibujado nuevamente al final para garantizar que quede
+  // por encima de cualquier elemento de decoración.
+  ctx.save();
+
+  ctx.font = `bold ${Math.round(28 * SCALE)}px PoppinsBold`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  roundedRect(ctx, nx, ny, nameW, nameH, 14 * SCALE);
+  ctx.fill();
+
+  ctx.strokeStyle = palette.strong;
+  ctx.lineWidth = 2 * SCALE;
+  ctx.stroke();
+
+  ctx.fillStyle = "white";
+  ctx.fillText(name, x, ny + nameH / 2);
+
+  ctx.restore();
 }
 
 app.get("/formation", async (req, res) => {
