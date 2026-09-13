@@ -1035,7 +1035,7 @@ app.listen(
     );
 
     console.log(
-      "🔥 Borde detrás de las decoraciones"
+      "🔥 corde detrás de las decoraciones"
     );
   }
 );
