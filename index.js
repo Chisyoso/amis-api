@@ -1,4 +1,3 @@
-//blee
 const express = require("express");
 const compression = require("compression");
 const { createCanvas, loadImage, registerFont } = require("canvas");
@@ -141,43 +140,60 @@ function truncateText(ctx, text, maxWidth) {
 }
 
 function hashString(str) {
-  let h = 0;
+  let h = 2166136261;
 
   for (let i = 0; i < str.length; i++) {
-    h =
-      (h << 5) -
-      h +
-      str.charCodeAt(i);
-
-    h |= 0;
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
 
-  return Math.abs(h);
+  return h >>> 0;
+}
+
+function randomFromSeed(seed) {
+  let x = hashString(seed);
+
+  x ^= x << 13;
+  x ^= x >>> 17;
+  x ^= x << 5;
+
+  return (x >>> 0) / 4294967296;
 }
 
 function paletteFromSeed(seed) {
-  const h = hashString(seed || "?");
+  const r1 = randomFromSeed(seed + "a");
+  const r2 = randomFromSeed(seed + "b");
+  const r3 = randomFromSeed(seed + "c");
+  const r4 = randomFromSeed(seed + "d");
 
-  const hue1 = h % 360;
+  const hue1 = Math.floor(r1 * 360);
+  const hue2 = Math.floor(r2 * 360);
+  const hue3 = Math.floor(r3 * 360);
 
-  const hue2 =
-    (hue1 + 35 + (h % 40)) % 360;
+  const saturation =
+    70 + Math.floor(r4 * 30);
+
+  const lightness =
+    48 + Math.floor(r3 * 17);
 
   return {
     fill:
-      `hsla(${hue1},85%,60%,0.18)`,
+      `hsla(${hue1},${saturation}%,${lightness}%,0.18)`,
 
     stroke:
-      `hsla(${hue1},90%,70%,0.45)`,
+      `hsla(${hue2},95%,78%,0.75)`,
 
     text:
-      `hsla(${hue2},100%,96%,0.98)`,
+      `hsl(${hue3},100%,97%)`,
 
     glow:
-      `hsla(${hue1},90%,65%,0.35)`,
+      `hsla(${hue1},100%,65%,0.55)`,
 
     strong:
-      `hsl(${hue1},85%,60%)`
+      `hsl(${hue1},${saturation}%,${lightness}%)`,
+
+    nick:
+      `hsl(${hue2},90%,${55 + Math.floor(r1 * 20)}%)`
   };
 }
 
@@ -453,7 +469,8 @@ function drawLevelBadge(
   ctx,
   x,
   y,
-  levelValue
+  levelValue,
+  palette
 ) {
   const levelText =
     String(levelValue || "").trim();
@@ -467,9 +484,11 @@ function drawLevelBadge(
   ctx.font =
     `bold ${Math.round(18 * SCALE)}px PoppinsBold`;
 
-  ctx.textAlign = "center";
+  ctx.textAlign =
+    "center";
 
-  ctx.textBaseline = "middle";
+  ctx.textBaseline =
+    "middle";
 
   const textW =
     ctx.measureText(levelText).width;
@@ -487,7 +506,7 @@ function drawLevelBadge(
     diameter / 2;
 
   ctx.shadowColor =
-    "rgba(0,0,0,0.35)";
+    palette.glow;
 
   ctx.shadowBlur =
     10 * SCALE;
@@ -503,7 +522,7 @@ function drawLevelBadge(
   );
 
   ctx.fillStyle =
-    "#15b84a";
+    palette.strong;
 
   ctx.fill();
 
@@ -513,7 +532,7 @@ function drawLevelBadge(
     2 * SCALE;
 
   ctx.strokeStyle =
-    "rgba(255,255,255,0.8)";
+    "white";
 
   ctx.stroke();
 
@@ -556,7 +575,7 @@ async function drawFiveVFivePlayer(
 
   const palette =
     paletteFromSeed(
-      `${nameRaw}|${styleRaw}|${avatarURL}`
+      `${nameRaw}|${styleRaw}|${avatarURL}|${accessoryURL}`
     );
 
   ctx.save();
@@ -615,42 +634,6 @@ async function drawFiveVFivePlayer(
     ctx.restore();
   }
 
-  ctx.beginPath();
-
-  ctx.arc(
-    x,
-    y,
-    size / 2 + 4 * SCALE,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.strokeStyle =
-    palette.strong;
-
-  ctx.lineWidth =
-    4 * SCALE;
-
-  ctx.stroke();
-
-  ctx.beginPath();
-
-  ctx.arc(
-    x,
-    y,
-    size / 2 + 10 * SCALE,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.strokeStyle =
-    "rgba(255,255,255,0.2)";
-
-  ctx.lineWidth =
-    2 * SCALE;
-
-  ctx.stroke();
-
   const accessory =
     await loadImageSafe(
       accessoryURL
@@ -672,11 +655,58 @@ async function drawFiveVFivePlayer(
     );
   }
 
+  ctx.save();
+
+  ctx.beginPath();
+
+  ctx.arc(
+    x,
+    y,
+    size / 2 + 4 * SCALE,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.strokeStyle =
+    palette.strong;
+
+  ctx.lineWidth =
+    4 * SCALE;
+
+  ctx.shadowColor =
+    palette.glow;
+
+  ctx.shadowBlur =
+    8 * SCALE;
+
+  ctx.stroke();
+
+  ctx.restore();
+
+  ctx.beginPath();
+
+  ctx.arc(
+    x,
+    y,
+    size / 2 + 10 * SCALE,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.strokeStyle =
+    "rgba(255,255,255,0.75)";
+
+  ctx.lineWidth =
+    2 * SCALE;
+
+  ctx.stroke();
+
   drawLevelBadge(
     ctx,
     x + size / 2 + 22 * SCALE,
     y + size / 2 - 18 * SCALE,
-    levelValue
+    levelValue,
+    palette
   );
 
   ctx.font =
@@ -795,8 +825,13 @@ async function drawFiveVFivePlayer(
     y + size / 2 +
     20 * SCALE;
 
-  ctx.fillStyle =
-    "rgba(0,0,0,0.6)";
+  ctx.save();
+
+  ctx.shadowColor =
+    palette.glow;
+
+  ctx.shadowBlur =
+    15 * SCALE;
 
   roundedRect(
     ctx,
@@ -807,18 +842,31 @@ async function drawFiveVFivePlayer(
     14 * SCALE
   );
 
+  ctx.fillStyle =
+    "rgba(0,0,0,0.78)";
+
   ctx.fill();
+
+  ctx.restore();
+
+  ctx.strokeStyle =
+    palette.nick;
+
+  ctx.lineWidth =
+    3 * SCALE;
+
+  ctx.stroke();
 
   ctx.strokeStyle =
     palette.strong;
 
   ctx.lineWidth =
-    2 * SCALE;
+    1 * SCALE;
 
   ctx.stroke();
 
   ctx.fillStyle =
-    "white";
+    palette.text;
 
   ctx.fillText(
     name,
@@ -1036,7 +1084,7 @@ app.listen(
     );
 
     console.log(
-      "🔥 corde detrás de las decoraciones"
+      "🔥 Bordes y nick sobre las decoraciones"
     );
   }
 );
