@@ -343,14 +343,6 @@ async function drawFiveVFivePlayer(ctx, player, x, y) {
   ctx.strokeStyle = "rgba(255,255,255,0.75)";
   ctx.lineWidth = 2 * SCALE;
   ctx.stroke();
-
-  drawLevelBadge(
-    ctx,
-    x + size / 2 + 22 * SCALE,
-    y + size / 2 - 18 * SCALE,
-    levelValue,
-    palette
-  );
 }
 
 async function drawAccessory(ctx, player, x, y) {
@@ -617,6 +609,28 @@ app.get("/formation", async (req, res) => {
         item.player,
         item.x,
         item.y
+      );
+    }
+
+    for (const item of playersToDraw) {
+      const player = item.player;
+      const avatarURL = player.avatar || DEFAULT_AVATAR;
+      const accessoryURL = player.accessory || "";
+      const nameRaw = player.name || "?";
+      const styleRaw = player.style || "?";
+
+      const palette = paletteFromSeed(
+        `${nameRaw}|${styleRaw}|${avatarURL}|${accessoryURL}`
+      );
+
+      const size = 150 * SCALE;
+
+      drawLevelBadge(
+        ctx,
+        item.x + size / 2 + 22 * SCALE,
+        item.y + size / 2 - 18 * SCALE,
+        player.level || "",
+        palette
       );
     }
 
